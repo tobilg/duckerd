@@ -53,7 +53,8 @@ const run = async (dbPath: string, options: any) => {
         return;
       }
       if (stderr) {
-        console.error(`ERD generation stderr: ${stderr}`);
+        console.error(`ERD generation: ${stderr}`);
+        console.error(`Please re-run the command!`);
         return;
       }
       console.log(`ERD diagram generated: ${outputFile}`);

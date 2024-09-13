@@ -1,6 +1,6 @@
 {
   "name": "duckerd",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A CLI tool for generating ERD diagrams from DuckDB databases",
   "author": "TobiLG <tobilg@gmail.com>",
   "repository": {
@@ -16,7 +16,7 @@
     "duckerd": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "start": "ts-node src/index.ts"
   },
   "engines": {

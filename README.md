@@ -26,7 +26,7 @@ Generate an ERD diagram of the database schemas.
 
 - `-d, --database <path>`: Path to the database file
 - `-t, --theme [theme]`: Theme of the chart (choices: `default`, `forest`, `dark`, `neutral`, default: `default`)
-- `-o, --output [output]`: Path to the output file
+- `-o, --output <path>`: Path to the output file
 - `-w, --width [width]`: Width of the page (default: `1024`)
 - `-H, --height [height]`: Height of the page (default: `768`)
 - `-f, --outputFormat [format]`: Output format for the generated image (choices: `svg`, `png`, `pdf`, default: `png`)
@@ -36,3 +36,5 @@ Generate an ERD diagram of the database schemas.
 ```bash
 duckerd -d ./mydb.duckdb -o ./erd.png -f png -t neutral -w 1600
 ```
+
+**It's possible that you need to re-run the command after the first execution, because the DuckERD CLI automatically installs the `@mermaid-js/mermaid-cli` package globally when it's missing on your system.**
