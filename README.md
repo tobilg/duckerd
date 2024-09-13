@@ -38,3 +38,23 @@ duckerd -d ./mydb.duckdb -o ./erd.png -f png -t neutral -w 1600
 ```
 
 **It's possible that you need to re-run the command after the first execution, because the DuckERD CLI automatically installs the `@mermaid-js/mermaid-cli` package globally when it's missing on your system.**
+
+## Usage example
+
+### Download the example database
+For this example we use the [AWS IAM database](https://raw.githubusercontent.com/tobilg/aws-iam-data/main/data/db/iam.duckdb) from the [AWS IAM Data](https://github.com/tobilg/aws-iam-data) project.
+
+```bash
+curl -LO https://raw.githubusercontent.com/tobilg/aws-iam-data/main/data/db/iam.duckdb
+```
+
+### Generate the ERD
+Then, we can generate the ERD as PNG with the `neutral` theme and otherwise default settings:
+
+```bash
+duckerd -d ./iam.duckdb -f png -t neutral
+```
+
+### Result
+
+![ERD of the AWS IAM DuckDB database](docs/iam_erd.png)
