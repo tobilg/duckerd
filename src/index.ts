@@ -45,7 +45,7 @@ const run = async (dbPath: string, options: any) => {
     const height = options.height || 768;
     const theme = options.theme || 'default';
 
-    const command = `npx mmdc -i ${mermaidFile} -o ${outputFile} -t ${theme} -w ${width} -H ${height}`;
+    const command = `npm exec --package=@mermaid-js/mermaid-cli mmdc -- -i ${mermaidFile} -o ${outputFile} -t ${theme} -w ${width} -H ${height}`;
 
     exec(command, (error, stdout, stderr) => {
       if (error) {

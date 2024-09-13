@@ -6,3 +6,5 @@ test/data/
 **/*.pdf
 
 .DS_Store
+
+dist/
