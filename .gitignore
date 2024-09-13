@@ -4,3 +4,5 @@ test/data/
 **/*.png
 **/*.svg
 **/*.pdf
+
+.DS_Store
