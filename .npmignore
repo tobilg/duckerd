@@ -1,0 +1,57 @@
+# Source files
+src/
+
+# TypeScript configuration
+tsconfig.json
+
+# Development and test files
+test/
+*.test.ts
+*.spec.ts
+
+# Git related
+.git/
+.gitignore
+
+# Editor configurations
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build artifacts
+build/
+
+# Dependency directories
+node_modules/
+
+# Environment files
+.env
+.env.*
+
+# Documentation files (except README.md)
+docs/
+
+# Example ERD outputs
+schema_erd.*
+
+# npm debug log
+npm-debug.log*
+
+# yarn error log
+yarn-error.log
+
+# macOS specific files
+.DS_Store
+
+# Windows specific files
+Thumbs.db
+
+**/*.png
+**/*.svg
+**/*.pdf
