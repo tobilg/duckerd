@@ -28,7 +28,7 @@ Generate an ERD diagram of the database schemas.
 - `-t, --theme [theme]`: Theme of the chart (choices: `default`, `forest`, `dark`, `neutral`, default: `default`)
 - `-o, --output [output]`: Path to the output file
 - `-w, --width [width]`: Width of the page (default: `1024`)
-- `-h, --height [height]`: Height of the page (default: `768`)
+- `-H, --height [height]`: Height of the page (default: `768`)
 - `-f, --outputFormat [format]`: Output format for the generated image (choices: `svg`, `png`, `pdf`, default: `png`)
 
 #### Example:
