@@ -170,7 +170,7 @@ export const generateMermaidCodeForAllDBs = (metadata: Metadata): string | undef
       // Add tables, columns and constraints
       mermaidCode += tables.map((table) => {
         return `"${table.databaseName}.${table.name}" {
-${table.columns!.map((column) => `      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${table.constraints?.filter((constraint) => constraint.columnName === column.name).map((constraint) => ((constraint.constraintType === "PRIMARY KEY" ? "PK" : "") || (constraint.constraintType === "FOREIGN KEY" ? "FK" : "") || "")).filter(str => str)}`).join("\n")}
+${table.columns!.map((column) => `      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${table.constraints?.filter((constraint) => constraint.columnName === column.name).map((constraint) => ((constraint.constraintType === "PRIMARY KEY" ? "PK" : "") || (constraint.constraintType === "FOREIGN KEY" ? "FK" : "") || "")).filter(str => str)}${addCommentIfNecessary(column.dataType)}`).join("\n")}
     }\n${table.constraints?.filter((constraint) => constraint.constraintType === "FOREIGN KEY").map((constraint) => `    "${table.databaseName}.${constraint.sql.match(/(?:^|)REFERENCES\s([^*]+?)\b\(/i)![1]}" ||--o{ "${table.databaseName}.${table.name}" : has`).join("\n")}`
       }).join("\n    ")
 
@@ -187,9 +187,22 @@ export const sanitizeDataType = (dataType: string): string => {
   if (dataType.startsWith("STRUCT(")) {
     return dataType.replace("STRUCT(", "STRUCT").replace(")", "");
   }
+
+  if (dataType.startsWith("ENUM(")) {
+    return "ENUM";
+  }
+
   if (dataType.includes(",")) {
     return dataType.replace(",", "_");
   }
 
   return dataType;
+}
+
+export const addCommentIfNecessary = (dataType: string): string => {
+  if (dataType.startsWith("ENUM(")) {
+    return ` "${dataType.replace("ENUM(", "").replace(")", "").split(",").map((value) => value.trim().replace(/'/g, "").replace(/"/g, "")).join(", ")}"`;
+  }
+
+  return "";
 }
