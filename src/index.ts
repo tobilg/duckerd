@@ -5,11 +5,12 @@ import * as path from 'path';
 import { exec } from 'child_process';
 import * as fs from 'fs';
 import { createERD } from './commands/erd';
+import { version } from '../package.json';
 
 const program = new Command();
 
 program
-  .version('0.1.0')
+  .version(version)
   .description('A CLI tool for generating ERD diagrams from DuckDB databases')
   .option('-d, --database <path>', 'Path to the database file')
   .option('-t, --theme [theme]', 'Theme of the chart (choices: "default", "forest", "dark", "neutral", default: "default")')
