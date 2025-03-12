@@ -184,5 +184,12 @@ ${table.columns!.map((column) => `      ${sanitizeDataType(column.dataType.toUpp
 }
 
 export const sanitizeDataType = (dataType: string): string => {
-  return dataType.startsWith("STRUCT(") ? "STRUCT" : dataType;
+  if (dataType.startsWith("STRUCT(")) {
+    return dataType.replace("STRUCT(", "STRUCT").replace(")", "");
+  }
+  if (dataType.includes(",")) {
+    return dataType.replace(",", "_");
+  }
+
+  return dataType;
 }
