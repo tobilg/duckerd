@@ -16,6 +16,7 @@ program
   .option('-t, --theme [theme]', 'Theme of the chart (choices: "default", "forest", "dark", "neutral", default: "default")')
   .option('-o, --output <path>', 'Path to the output file')
   .option('-m, --mmd-output <path>', 'Path to write the Mermaid source (.mmd) file (default: cleaned up after rendering)')
+  .option('-e, --expand-structs', 'Expand STRUCT type columns into individual sub-field rows')
   .option('-w, --width [width]', 'Width of the page (default: 1024)')
   .option('-H, --height [height]', 'Height of the page (default: 768)')
   .option('-f, --outputFormat [format]', 'Output format for the generated image. (choices: "svg", "png", "pdf")')
@@ -33,7 +34,7 @@ program
   });
 
 const run = async (dbPath: string, options: any) => {
-  const mermaidDiagram = await createERD(dbPath);
+  const mermaidDiagram = await createERD(dbPath, options.expandStructs ?? false);
   const mermaidFile = path.resolve('schema_erd.mmd');
 
   if (mermaidDiagram) {
