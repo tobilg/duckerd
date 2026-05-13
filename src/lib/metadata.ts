@@ -189,16 +189,9 @@ ${table.columns!.map((column) => `      ${sanitizeDataType(column.dataType.toUpp
 }
 
 export const sanitizeDataType = (dataType: string): string => {
-  if (dataType.startsWith("STRUCT(")) {
-    return dataType.replace("STRUCT(", "STRUCT").replace(")", "");
-  }
-
-  if (dataType.startsWith("ENUM(")) {
-    return "ENUM";
-  }
-
-  if (dataType.includes(",")) {
-    return dataType.replace(",", "_");
+  const parenIdx = dataType.indexOf("(");
+  if (parenIdx !== -1) {
+    return dataType.substring(0, parenIdx);
   }
 
   return dataType;
