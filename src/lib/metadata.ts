@@ -177,9 +177,9 @@ export const generateMermaidCodeForAllDBs = (metadata: Metadata, expandStructs: 
         return `"${table.databaseName}.${table.name}" {
 ${table.columns!.flatMap((column) => {
   const constraintMarkers = table.constraints?.filter((constraint) => constraint.columnName === column.name).map((constraint) => ((constraint.constraintType === "PRIMARY KEY" ? "PK" : "") || (constraint.constraintType === "FOREIGN KEY" ? "FK" : "") || "")).filter(str => str) ?? [];
-  const structFields = expandStructs ? parseStructFields(column.dataType) : [];
+  const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
   if (structFields.length > 0) {
-    return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${column.name}__${field.name}`);
+    return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
   }
   return [`      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${constraintMarkers}${addCommentIfNecessary(column.dataType)}`];
 }).join("\n")}
@@ -225,10 +225,30 @@ export const parseStructFields = (dataType: string): { name: string; type: strin
   return fields;
 }
 
+export const expandStructFields = (prefix: string, dataType: string): { name: string; type: string }[] => {
+  const fields = parseStructFields(dataType);
+  if (fields.length === 0) return [];
+  return fields.flatMap((field) => {
+    const nestedFields = parseStructFields(field.type);
+    if (nestedFields.length > 0) {
+      return expandStructFields(`${prefix}__${field.name}`, field.type);
+    }
+    return [{ name: `${prefix}__${field.name}`, type: field.type }];
+  });
+}
+
+const COLLAPSIBLE_TYPES = ["STRUCT", "MAP", "ENUM"];
+
 export const sanitizeDataType = (dataType: string): string => {
-  const parenIdx = dataType.indexOf("(");
-  if (parenIdx !== -1) {
-    return dataType.substring(0, parenIdx);
+  const upper = dataType.toUpperCase();
+  for (const t of COLLAPSIBLE_TYPES) {
+    if (upper.startsWith(`${t}(`)) {
+      return t;
+    }
+  }
+
+  if (dataType.includes(",")) {
+    return dataType.replace(/,/g, "_");
   }
 
   return dataType;
