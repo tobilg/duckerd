@@ -1,4 +1,4 @@
-import { Connection } from 'duckdb-async';
+import { DuckDBConnection } from '@duckdb/node-api';
 
 export interface Metadata {
   databases?: Database[];
@@ -96,14 +96,19 @@ const contraintsMetadataQuery = `SELECT database_name as databaseName, schema_na
 // Constraints metadata query
 const sequencesMetadataQuery = `SELECT database_name as databaseName, schema_name as schemaName, sequence_name as name, temporary as isTemporary, start_value as startValue, last_value as lastValue, min_value as minValue, max_value as maxValue, increment_by as incrementBy, sql FROM duckdb_sequences() ORDER BY database_name, schema_name, sequence_name`;
 
-export const getMetadata = async (conn: Connection): Promise<Metadata> => {
-  const databaseRaw = await conn.all(databaseMetadataQuery) as RawDatabase[];
-  const schemas = await conn.all(schemaMetadataQuery) as RawSchema[];
-  const tables = await conn.all(tablesMetadataQuery) as Table[];
-  const columns = await conn.all(columnsMetadataQuery) as Column[];
-  const indexes =   await conn.all(indexesMetadataQuery) as Index[];
-  const constraints = await conn.all(contraintsMetadataQuery) as Constraint[];
-  const sequences = await conn.all(sequencesMetadataQuery) as Sequence[];
+const queryAll = async <T>(conn: DuckDBConnection, sql: string): Promise<T[]> => {
+  const reader = await conn.runAndReadAll(sql);
+  return reader.getRowObjectsJson() as unknown as T[];
+}
+
+export const getMetadata = async (conn: DuckDBConnection): Promise<Metadata> => {
+  const databaseRaw = await queryAll<RawDatabase>(conn, databaseMetadataQuery);
+  const schemas = await queryAll<RawSchema>(conn, schemaMetadataQuery);
+  const tables = await queryAll<Table>(conn, tablesMetadataQuery);
+  const columns = await queryAll<Column>(conn, columnsMetadataQuery);
+  const indexes = await queryAll<Index>(conn, indexesMetadataQuery);
+  const constraints = await queryAll<Constraint>(conn, contraintsMetadataQuery);
+  const sequences = await queryAll<Sequence>(conn, sequencesMetadataQuery);
 
   const databases = databaseRaw.map(database => ({
     name: database.databaseName,

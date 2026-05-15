@@ -1,6 +1,6 @@
 {
   "name": "duckerd",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "A CLI tool for generating ERD diagrams from DuckDB databases",
   "author": "TobiLG <tobilg@gmail.com>",
   "repository": {
@@ -20,16 +20,16 @@
     "start": "ts-node src/index.ts"
   },
   "engines": {
-    "node": "^18.19 || >=20.0"
+    "node": ">=22.0"
   },
   "keywords": ["duckdb", "erd", "diagram", "cli"],
   "dependencies": {
-    "commander": "^13.1.0",
-    "duckdb-async": "^1.2.0"
+    "@duckdb/node-api": "^1.5.2-r.1",
+    "commander": "^14.0.3"
   },
   "devDependencies": {
-    "@types/node": "^18.11.9",
+    "@types/node": "^22",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^6.0.3"
   }
 }

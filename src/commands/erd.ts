@@ -1,13 +1,15 @@
-import { Database } from 'duckdb-async';
+import { DuckDBInstance } from '@duckdb/node-api';
 import { generateMermaidCodeForAllDBs, getMetadata } from '../lib/metadata';
 
 export const createERD = async (databasePath: string): Promise<string | undefined> => {
-  const db = await Database.create(databasePath);
-  const conn = await db.connect();
-  const metadata = await getMetadata(conn);
-  await db.close();
+  const instance = await DuckDBInstance.create(databasePath);
+  const conn = await instance.connect();
 
-  const mermaidCode = generateMermaidCodeForAllDBs(metadata);
-  
-  return mermaidCode;
+  try {
+    const metadata = await getMetadata(conn);
+    return generateMermaidCodeForAllDBs(metadata);
+  } finally {
+    conn.closeSync();
+    instance.closeSync();
+  }
 }
