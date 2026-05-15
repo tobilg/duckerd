@@ -17,7 +17,8 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsc",
-    "start": "ts-node src/index.ts"
+    "start": "ts-node src/index.ts",
+    "test": "ts-node src/lib/metadata.test.ts"
   },
   "engines": {
     "node": ">=22.0"
