@@ -1,6 +1,6 @@
 {
   "name": "duckerd",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A CLI tool for generating ERD diagrams from DuckDB databases",
   "author": "TobiLG <tobilg@gmail.com>",
   "repository": {
