@@ -162,7 +162,7 @@ export const getMetadata = async (conn: DuckDBConnection): Promise<Metadata> => 
   return metadata;
 }
 
-export const generateMermaidCodeForAllDBs = (metadata: Metadata): string | undefined => {
+export const generateMermaidCodeForAllDBs = (metadata: Metadata, expandStructs: boolean = false): string | undefined => {
   let mermaidCode = `erDiagram
   
   `;
@@ -175,7 +175,14 @@ export const generateMermaidCodeForAllDBs = (metadata: Metadata): string | undef
       // Add tables, columns and constraints
       mermaidCode += tables.map((table) => {
         return `"${table.databaseName}.${table.name}" {
-${table.columns!.map((column) => `      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${table.constraints?.filter((constraint) => constraint.columnName === column.name).map((constraint) => ((constraint.constraintType === "PRIMARY KEY" ? "PK" : "") || (constraint.constraintType === "FOREIGN KEY" ? "FK" : "") || "")).filter(str => str)}${addCommentIfNecessary(column.dataType)}`).join("\n")}
+${table.columns!.flatMap((column) => {
+  const constraintMarkers = table.constraints?.filter((constraint) => constraint.columnName === column.name).map((constraint) => ((constraint.constraintType === "PRIMARY KEY" ? "PK" : "") || (constraint.constraintType === "FOREIGN KEY" ? "FK" : "") || "")).filter(str => str) ?? [];
+  const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
+  if (structFields.length > 0) {
+    return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
+  }
+  return [`      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${constraintMarkers}${addCommentIfNecessary(column.dataType)}`];
+}).join("\n")}
     }\n${table.constraints?.filter((constraint) => constraint.constraintType === "FOREIGN KEY").map((constraint) => `    "${table.databaseName}.${constraint.sql.match(/(?:^|)REFERENCES\s([^*]+?)\b\(/i)![1]}" ||--o{ "${table.databaseName}.${table.name}" : has`).join("\n")}`
       }).join("\n    ")
 
@@ -188,17 +195,60 @@ ${table.columns!.map((column) => `      ${sanitizeDataType(column.dataType.toUpp
   }
 }
 
-export const sanitizeDataType = (dataType: string): string => {
-  if (dataType.startsWith("STRUCT(")) {
-    return dataType.replace("STRUCT(", "STRUCT").replace(")", "");
+export const parseStructFields = (dataType: string): { name: string; type: string }[] => {
+  if (!dataType.toUpperCase().startsWith("STRUCT(")) {
+    return [];
   }
+  const inner = dataType.slice(dataType.indexOf("(") + 1, dataType.lastIndexOf(")"));
+  const fields: { name: string; type: string }[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of inner) {
+    if (ch === "(" || ch === "<") depth++;
+    else if (ch === ")" || ch === ">") depth--;
+    else if (ch === "," && depth === 0) {
+      const parts = current.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        fields.push({ name: parts[0].replace(/['"]/g, ""), type: parts.slice(1).join(" ") });
+      }
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) {
+    const parts = current.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      fields.push({ name: parts[0].replace(/['"]/g, ""), type: parts.slice(1).join(" ") });
+    }
+  }
+  return fields;
+}
 
-  if (dataType.startsWith("ENUM(")) {
-    return "ENUM";
+export const expandStructFields = (prefix: string, dataType: string): { name: string; type: string }[] => {
+  const fields = parseStructFields(dataType);
+  if (fields.length === 0) return [];
+  return fields.flatMap((field) => {
+    const nestedFields = parseStructFields(field.type);
+    if (nestedFields.length > 0) {
+      return expandStructFields(`${prefix}__${field.name}`, field.type);
+    }
+    return [{ name: `${prefix}__${field.name}`, type: field.type }];
+  });
+}
+
+const COLLAPSIBLE_TYPES = ["STRUCT", "MAP", "ENUM"];
+
+export const sanitizeDataType = (dataType: string): string => {
+  const upper = dataType.toUpperCase();
+  for (const t of COLLAPSIBLE_TYPES) {
+    if (upper.startsWith(`${t}(`)) {
+      return t;
+    }
   }
 
   if (dataType.includes(",")) {
-    return dataType.replace(",", "_");
+    return dataType.replace(/,/g, "_");
   }
 
   return dataType;

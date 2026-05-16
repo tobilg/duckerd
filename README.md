@@ -27,9 +27,11 @@ Generate an ERD diagram of the database schemas.
 - `-d, --database <path>`: Path to the database file
 - `-t, --theme [theme]`: Theme of the chart (choices: `default`, `forest`, `dark`, `neutral`, default: `default`)
 - `-o, --output <path>`: Path to the output file
+- `-m, --mmd-output <path>`: Path to write the Mermaid source (`.mmd`) file (default: cleaned up after rendering)
 - `-w, --width [width]`: Width of the page (default: `1024`)
 - `-H, --height [height]`: Height of the page (default: `768`)
 - `-f, --outputFormat [format]`: Output format for the generated image (choices: `svg`, `png`, `pdf`, default: `png`)
+- `-e, --expand-structs`: Expand `STRUCT` columns into individual sub-field rows (e.g. `full_name STRUCT(given VARCHAR, family VARCHAR)` becomes `full_name__given` and `full_name__family`)
 
 #### Example:
 
