@@ -13,7 +13,7 @@ permissions:
 jobs:
   build-and-test:
     name: Build and test
-    if: github.ref == 'refs/heads/main'
+    if: '!github.event.deleted'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,7 +27,8 @@ jobs:
         with:
           node-version: '24'
           check-latest: true
-          cache: npm
+          cache: ${{ github.ref == 'refs/heads/main' && 'npm' || '' }}
+          package-manager-cache: false
 
       - name: Install dependencies
         run: npm ci
@@ -38,8 +39,23 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Pack tested release
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          mkdir -p "$RUNNER_TEMP/npm-package"
+          npm pack --pack-destination "$RUNNER_TEMP/npm-package"
+
+      - name: Upload release package
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/npm-package/*.tgz
+          if-no-files-found: error
+
   publish:
-    name: Build, test, and publish
+    name: Publish to npm
+    needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/') && !github.event.deleted
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -82,16 +98,13 @@ jobs:
           appendFileSync(process.env.GITHUB_OUTPUT, `dist_tag=${distTag}\n`);
           NODE
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Test
-        run: npm test
+      - name: Download tested release package
+        uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: npm-package
 
       - name: Publish to npm with trusted publishing
         env:
           NPM_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
-        run: npm publish --access public --provenance --tag "$NPM_DIST_TAG"
+        run: npm publish ./npm-package/*.tgz --access public --provenance --tag "$NPM_DIST_TAG"

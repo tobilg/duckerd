@@ -114,6 +114,6 @@ Tests cover metadata helpers, theme validation and precedence, custom colors/fon
 
 ## CI and releases
 
-GitHub Actions builds and tests pushes to `main` using Node.js 24. Pushing a `v<version>` tag also builds, tests, and publishes to npm through trusted publishing. Release tags must match `package.json` and point to a commit in `main`'s history. Stable releases use npm's `latest` tag; prereleases use `next`.
+GitHub Actions uses a shared build-and-test job for pushes to `main` and `v<version>` tags on Node.js 24. For release tags, a dependent publish job validates the release, then downloads the tested package and publishes it to npm through trusted publishing. Release tags must match `package.json` and point to a commit in `main`'s history. Stable releases use npm's `latest` tag; prereleases use `next`.
 
 Before the first automated release, configure the npm trusted publisher for `tobilg/duckerd` and workflow filename `ci.yml`, with direct `npm publish` allowed. See the [publishing guide](docs/publishing.md) for the exact settings and release commands.
