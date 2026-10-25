@@ -12,6 +12,7 @@ test/
 # Git related
 .git/
 .gitignore
+.github/
 
 # Editor configurations
 .vscode/

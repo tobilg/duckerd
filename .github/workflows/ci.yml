@@ -1,0 +1,97 @@
+name: CI and npm publish
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          check-latest: true
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  publish:
+    name: Build, test, and publish
+    if: startsWith(github.ref, 'refs/tags/') && !github.event.deleted
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out tagged source and branch history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          check-latest: true
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      # Git tags have no branch association; push.branches does not filter tags.
+      - name: Verify release tag and main ancestry
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! git merge-base --is-ancestor HEAD refs/remotes/origin/main; then
+            echo "::error::Release tags must point to a commit in main's history."
+            exit 1
+          fi
+          node <<'NODE'
+          const { appendFileSync } = require('node:fs');
+          const { version } = require('./package.json');
+          if (process.env.RELEASE_TAG !== `v${version}`) {
+            console.error(`Release tag must match package.json: expected v${version}, received ${process.env.RELEASE_TAG}`);
+            process.exit(1);
+          }
+          const distTag = version.includes('-') ? 'next' : 'latest';
+          appendFileSync(process.env.GITHUB_OUTPUT, `dist_tag=${distTag}\n`);
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Publish to npm with trusted publishing
+        env:
+          NPM_DIST_TAG: ${{ steps.release.outputs.dist_tag }}
+        run: npm publish --access public --provenance --tag "$NPM_DIST_TAG"

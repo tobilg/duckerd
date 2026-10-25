@@ -111,3 +111,9 @@ npm test
 ```
 
 Tests cover metadata helpers, theme validation and precedence, custom colors/fonts/corners in all three formats, and CLI generation with npm unavailable.
+
+## CI and releases
+
+GitHub Actions builds and tests pushes to `main` using Node.js 24. Pushing a `v<version>` tag also builds, tests, and publishes to npm through trusted publishing. Release tags must match `package.json` and point to a commit in `main`'s history. Stable releases use npm's `latest` tag; prereleases use `next`.
+
+Before the first automated release, configure the npm trusted publisher for `tobilg/duckerd` and workflow filename `ci.yml`, with direct `npm publish` allowed. See the [publishing guide](docs/publishing.md) for the exact settings and release commands.
