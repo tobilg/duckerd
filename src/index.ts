@@ -1,73 +1,82 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
-import * as path from 'path';
-import { exec } from 'child_process';
-import * as fs from 'fs';
+import { Command, InvalidArgumentError, Option } from 'commander';
+import * as path from 'node:path';
+import { existsSync } from 'node:fs';
+import { writeFile } from 'node:fs/promises';
 import { createERD } from './commands/erd';
+import { OutputFormat, outputFormats, renderERD } from './lib/render';
+import { loadTheme, Theme, themeNames } from './lib/themes';
 import { version } from '../package.json';
+
+interface Options {
+  database?: string;
+  theme: Theme;
+  themeFile?: string;
+  themeJson?: string;
+  output?: string;
+  mmdOutput?: string;
+  expandStructs?: boolean;
+  width: number;
+  height: number;
+  outputFormat?: OutputFormat;
+}
+
+const positiveInteger = (value: string): number => {
+  const number = Number(value);
+  if (!/^\d+$/.test(value) || !Number.isSafeInteger(number) || number <= 0) {
+    throw new InvalidArgumentError('Must be a positive integer.');
+  }
+  return number;
+};
 
 const program = new Command();
 
 program
   .version(version)
-  .description('A CLI tool for generating ERD diagrams from DuckDB databases')
+  .description('Generate ERD diagrams from DuckDB databases using Pele')
   .option('-d, --database <path>', 'Path to the database file')
-  .option('-t, --theme [theme]', 'Theme of the chart (choices: "default", "forest", "dark", "neutral", default: "default")')
-  .option('-o, --output <path>', 'Path to the output file')
-  .option('-m, --mmd-output <path>', 'Path to write the Mermaid source (.mmd) file (default: cleaned up after rendering)')
+  .addOption(new Option('-t, --theme <theme>', 'Color palette of the chart').choices([...themeNames]).default('default'))
+  .option('--theme-file <path>', 'JSON theme file overriding the selected preset')
+  .option('--theme-json <json>', 'Inline JSON theme overrides (takes precedence over --theme-file)')
+  .option('-o, --output <path>', 'Path to the output file (its extension determines the format unless -f is supplied)')
+  .option('-m, --mmd-output <path>', 'Save the ER diagram source (.mmd) consumed by Pele')
   .option('-e, --expand-structs', 'Expand STRUCT type columns into individual sub-field rows')
-  .option('-w, --width [width]', 'Width of the page (default: 1024)')
-  .option('-H, --height [height]', 'Height of the page (default: 768)')
-  .option('-f, --outputFormat [format]', 'Output format for the generated image. (choices: "svg", "png", "pdf")')
-  .action((options) => {
-    const dbPath = options.database ? path.resolve(options.database) : ':memory:';
-    console.log('Generating ERD diagram...');
-
-    // Check if the database file exists
-    if (dbPath !== ':memory:' && !fs.existsSync(dbPath)) {
-      console.error(`Error: Database file not found at ${dbPath}`);
-      process.exit(1);
+  .option('-w, --width <width>', 'Output canvas width in pixels', positiveInteger, 1024)
+  .option('-H, --height <height>', 'Output canvas height in pixels', positiveInteger, 768)
+  .addOption(new Option('-f, --outputFormat <format>', 'Output format (default: output extension or png)').choices([...outputFormats]))
+  .action(async (options: Options) => {
+    const dbPath = !options.database || options.database === ':memory:' ? ':memory:' : path.resolve(options.database);
+    if (dbPath !== ':memory:' && !existsSync(dbPath)) {
+      throw new Error(`Database file not found at ${dbPath}`);
     }
 
-    run(dbPath, options);
+    const extension = options.output ? path.extname(options.output).slice(1).toLowerCase() : '';
+    const format = options.outputFormat ?? (extension || 'png');
+    if (!outputFormats.includes(format as OutputFormat)) {
+      throw new Error(`Unsupported output format "${format}". Choose svg, png, or pdf.`);
+    }
+    const dbName = dbPath === ':memory:' ? 'memory_db' : path.basename(dbPath, path.extname(dbPath));
+    const outputFile = path.resolve(options.output ?? `${dbName}_erd.${format}`);
+    if (options.mmdOutput && path.resolve(options.mmdOutput) === outputFile) {
+      throw new Error('The diagram output and source output must use different paths.');
+    }
+
+    const theme = await loadTheme(options);
+    console.log('Generating ERD diagram...');
+    const source = await createERD(dbPath, options.expandStructs ?? false);
+    if (!source) {
+      console.log('No tables found in the database.');
+      return;
+    }
+
+    const image = await renderERD(source, { ...options, theme, format: format as OutputFormat });
+    if (options.mmdOutput) await writeFile(path.resolve(options.mmdOutput), source);
+    await writeFile(outputFile, image);
+    console.log(`ERD diagram generated: ${outputFile}`);
   });
 
-const run = async (dbPath: string, options: any) => {
-  const mermaidDiagram = await createERD(dbPath, options.expandStructs ?? false);
-  const mermaidFile = path.resolve('schema_erd.mmd');
-
-  if (mermaidDiagram) {
-    fs.writeFileSync(mermaidFile, mermaidDiagram);
-
-    if (options.mmdOutput) {
-      fs.copyFileSync(mermaidFile, path.resolve(options.mmdOutput));
-    }
-
-    // Extract the database name from the dbPath
-    const dbName = dbPath === ':memory:' ? 'memory_db' : path.basename(dbPath, path.extname(dbPath));
-    const outputFile = options.output || `${dbName}_erd.${options.outputFormat || 'png'}`;
-    const width = options.width || 1024;
-    const height = options.height || 768;
-    const theme = options.theme || 'default';
-
-    const command = `npm exec --package=@mermaid-js/mermaid-cli mmdc -- -i ${mermaidFile} -o ${outputFile} -t ${theme} -w ${width} -H ${height}`;
-
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error generating ERD: ${error.message}`);
-        return;
-      }
-      if (stderr) {
-        console.error(`ERD generation: ${stderr}`);
-        console.error(`Please re-run the command!`);
-        return;
-      }
-      console.log(`ERD diagram generated: ${outputFile}`);
-
-      fs.unlinkSync(mermaidFile);
-    });
-  }
-};
-
-program.parse(process.argv);
+program.parseAsync(process.argv).catch((error: unknown) => {
+  console.error(`Error generating ERD: ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
+});

@@ -1,6 +1,6 @@
 {
   "name": "duckerd",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "A CLI tool for generating ERD diagrams from DuckDB databases",
   "author": "TobiLG <tobilg@gmail.com>",
   "repository": {
@@ -18,19 +18,30 @@
   "scripts": {
     "build": "rm -rf dist && tsc",
     "start": "node --import tsx src/index.ts",
-    "test": "node --import tsx src/lib/metadata.test.ts"
+    "test": "node --import tsx --test src/lib/*.test.ts src/commands/*.test.ts"
   },
   "engines": {
-    "node": ">=22.0"
+    "node": ">=22.12.0"
   },
-  "keywords": ["duckdb", "erd", "diagram", "cli"],
+  "keywords": [
+    "duckdb",
+    "erd",
+    "diagram",
+    "cli"
+  ],
   "dependencies": {
-    "@duckdb/node-api": "^1.5.5-r.3",
-    "commander": "^14.0.3"
+    "@duckdb/node-api": "^2.0.0-r.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "commander": "^15.0.0",
+    "pdfkit": "^0.20.2",
+    "pele": "^1.10.0",
+    "svg-to-pdfkit": "^0.1.8"
   },
   "devDependencies": {
     "@types/node": "^22",
-    "tsx": "^4.23.9",
+    "@types/pdfkit": "^0.17.7",
+    "@types/svg-to-pdfkit": "^0.1.4",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }

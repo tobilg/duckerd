@@ -1,0 +1,15 @@
+{
+  "colors": {
+    "background": "#101820",
+    "foreground": "#eeeeee",
+    "muted": "#b0bec5",
+    "line": "#a8c4e0",
+    "surface": "#203040",
+    "surfaceAlt": "#182838",
+    "border": "#547080",
+    "accent": "#80cbc4"
+  },
+  "fontFamily": "Arial, sans-serif",
+  "fontSize": 16,
+  "borderRadius": 8
+}
