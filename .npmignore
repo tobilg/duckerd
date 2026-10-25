@@ -37,6 +37,7 @@ node_modules/
 
 # Documentation files (except README.md)
 docs/
+assets/
 
 # Example ERD outputs
 schema_erd.*
