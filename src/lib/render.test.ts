@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { inflateSync } from 'node:zlib';
 import { renderERD, themeNames } from './render';
 import { parseTheme, resolveTheme } from './themes';
+import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 
 const pdfDrawingCommands = (pdf: Buffer): string => [...pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
   .map((match) => inflateSync(Buffer.from(match[1], 'latin1')).toString()).join('\n');
@@ -126,4 +127,42 @@ test('borderRadius changes exported geometry, including zero for square corners'
   const squarePdf = pdfDrawingCommands(await renderERD(entity, { ...options, format: 'pdf', theme: square }));
   const roundedPdf = pdfDrawingCommands(await renderERD(entity, { ...options, format: 'pdf', theme: rounded }));
   assert.notEqual(squarePdf, roundedPdf);
+});
+
+test('inferred edges retain dashed paths and labels but lose cardinalities in every export', async () => {
+  const placeholder = `erDiagram
+    orders { INTEGER order_id }
+    lineitem { INTEGER order_id }
+    orders }o..o{ lineitem : "inferred: order_id (unknown)"`;
+  const inferred = placeholder.replace('erDiagram', `erDiagram\n${INFERRED_RELATIONSHIPS_COMMENT}`);
+  const options = { theme: 'default' as const, width: 640, height: 480 };
+  const baselineSvg = (await renderERD(placeholder, { ...options, format: 'svg' })).toString();
+  const inferredSvg = (await renderERD(inferred, { ...options, format: 'svg' })).toString();
+  assert.match(baselineSvg, /class="pele-marker"/);
+  assert.doesNotMatch(inferredSvg, /class="pele-marker"/);
+  assert.match(inferredSvg, /<path[^>]*stroke-dasharray="4 3"/);
+  assert.match(inferredSvg, />inferred: order_id \(unknown\)<\/text>/);
+  const edgePath = (svg: string) => svg.match(/<path[^>]*stroke-dasharray="4 3"[^>]*\/>/)![0];
+  assert.equal(edgePath(inferredSvg), edgePath(baselineSvg), 'edge geometry is preserved');
+
+  const png = await renderERD(inferred, { ...options, format: 'png' });
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  assert.equal(png.readUInt32BE(16), 640);
+  assert.equal(png.readUInt32BE(20), 480);
+  assert.notDeepEqual(png, await renderERD(placeholder, { ...options, format: 'png' }), 'markers are removed from raster export');
+  const pdf = await renderERD(inferred, { ...options, format: 'pdf' });
+  assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+  assert.doesNotMatch(pdf.toString('latin1'), /\/Subtype \/Image/);
+  assert.notEqual(pdfDrawingCommands(pdf), pdfDrawingCommands(await renderERD(placeholder, { ...options, format: 'pdf' })),
+    'markers are removed from vector export');
+});
+
+test('ordinary FK cardinalities remain intact and inference-like text is not a directive', async () => {
+  const options = { theme: 'default' as const, width: 320, height: 240, format: 'svg' as const };
+  const baseline = await renderERD(source, options);
+  assert.match(baseline.toString(), /class="pele-marker"/);
+  assert.deepEqual(await renderERD(source.replace('erDiagram', `erDiagram\n${INFERRED_RELATIONSHIPS_COMMENT}`), options), baseline);
+
+  const labeled = source.replace(': has', `: "${INFERRED_RELATIONSHIPS_COMMENT}"`).replace('||--o{', '}o..o{');
+  assert.match((await renderERD(labeled, options)).toString(), /class="pele-marker"/);
 });

@@ -7,6 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import { createERD } from './commands/erd';
 import { OutputFormat, outputFormats, renderERD } from './lib/render';
 import { loadTheme, Theme, themeNames } from './lib/themes';
+import { DEFAULT_INFER_REGEX } from './lib/inference';
 import { version } from '../package.json';
 
 interface Options {
@@ -17,6 +18,8 @@ interface Options {
   output?: string;
   mmdOutput?: string;
   expandStructs?: boolean;
+  infer: boolean;
+  inferRegex?: RegExp;
   width: number;
   height: number;
   outputFormat?: OutputFormat;
@@ -32,6 +35,14 @@ const positiveInteger = (value: string): number => {
 
 const program = new Command();
 
+const inferenceRegex = (value: string): RegExp => {
+  try {
+    return new RegExp(value, 'i');
+  } catch (error) {
+    throw new InvalidArgumentError(`Invalid --infer-regex: ${error instanceof Error ? error.message : String(error)}`);
+  }
+};
+
 program
   .version(version)
   .description('Generate ERD diagrams from DuckDB databases using Pele')
@@ -42,10 +53,15 @@ program
   .option('-o, --output <path>', 'Path to the output file (its extension determines the format unless -f is supplied)')
   .option('-m, --mmd-output <path>', 'Save the ER diagram source (.mmd) consumed by Pele')
   .option('-e, --expand-structs', 'Expand STRUCT type columns into individual sub-field rows')
+  .option('--infer', 'Infer relationships when the diagram has no declared foreign keys', false)
+  .option('--infer-regex <pattern>', 'Case-insensitive column-name regex for inference (requires --infer; default: _id$)', inferenceRegex)
   .option('-w, --width <width>', 'Output canvas width in pixels', positiveInteger, 1024)
   .option('-H, --height <height>', 'Output canvas height in pixels', positiveInteger, 768)
   .addOption(new Option('-f, --outputFormat <format>', 'Output format (default: output extension or png)').choices([...outputFormats]))
   .action(async (options: Options) => {
+    if (options.inferRegex !== undefined && !options.infer) {
+      throw new Error('--infer-regex requires --infer.');
+    }
     const dbPath = !options.database || options.database === ':memory:' ? ':memory:' : path.resolve(options.database);
     if (dbPath !== ':memory:' && !existsSync(dbPath)) {
       throw new Error(`Database file not found at ${dbPath}`);
@@ -64,7 +80,7 @@ program
 
     const theme = await loadTheme(options);
     console.log('Generating ERD diagram...');
-    const source = await createERD(dbPath, options.expandStructs ?? false);
+    const source = await createERD(dbPath, options.expandStructs ?? false, options.infer, options.inferRegex ?? DEFAULT_INFER_REGEX);
     if (!source) {
       console.log('No tables found in the database.');
       return;

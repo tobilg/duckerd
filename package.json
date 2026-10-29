@@ -1,6 +1,6 @@
 {
   "name": "duckerd",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A CLI tool for generating ERD diagrams from DuckDB databases",
   "author": "TobiLG <tobilg@gmail.com>",
   "repository": {
@@ -38,7 +38,7 @@
     "svg-to-pdfkit": "^0.1.8"
   },
   "devDependencies": {
-    "@types/node": "^22",
+    "@types/node": "^24.19.2",
     "@types/pdfkit": "^0.17.7",
     "@types/svg-to-pdfkit": "^0.1.4",
     "tsx": "^4.23.15",

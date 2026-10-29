@@ -3,6 +3,7 @@ import { render } from 'pele';
 import PDFDocument from 'pdfkit';
 import SVGtoPDF from 'svg-to-pdfkit';
 import { resolveTheme, Theme, ThemeDefinition } from './themes';
+import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 
 export { themeNames, type Theme } from './themes';
 
@@ -60,6 +61,11 @@ const applyTheme = (svg: string, theme: ThemeDefinition): string => {
   });
 };
 
+const removeInferredMarkers = (svg: string): string => svg.replace(
+  /<g\b[^>]*\bclass="pele-edge pele-er-non-identifying"[^>]*>[\s\S]*?<\/g>/g,
+  edge => edge.replace(/<(?:path|circle)\b[^>]*\bclass="pele-marker"[^>]*\/>/g, ''),
+);
+
 export const renderERD = async (source: string, options: RenderOptions): Promise<Buffer> => {
   const theme = typeof options.theme === 'string' ? resolveTheme(options.theme) : options.theme;
   const diagram = render(source, {
@@ -68,9 +74,13 @@ export const renderERD = async (source: string, options: RenderOptions): Promise
   const scale = Math.min(options.width / diagram.width, options.height / diagram.height);
   const x = (options.width - diagram.width * scale) / 2;
   const y = (options.height - diagram.height * scale) / 2;
+  // Mermaid requires cardinalities in source. DuckERD's inference comment
+  // identifies diagrams whose dashed edges use placeholders for unknown values.
+  const diagramSvg = source.split(/\r?\n/).some(line => line.trim() === INFERRED_RELATIONSHIPS_COMMENT)
+    ? removeInferredMarkers(diagram.svg) : diagram.svg;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}" viewBox="0 0 ${options.width} ${options.height}">
 <rect width="100%" height="100%" fill="${theme.colors.background}"/>
-<g transform="translate(${x} ${y}) scale(${scale})">${applyTheme(diagram.svg, theme)}</g>
+<g transform="translate(${x} ${y}) scale(${scale})">${applyTheme(diagramSvg, theme)}</g>
 </svg>`;
 
   if (options.format === 'svg') return Buffer.from(svg);

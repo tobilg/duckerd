@@ -1,4 +1,5 @@
 import { DuckDBConnection } from '@duckdb/node-api';
+import { DEFAULT_INFER_REGEX, INFERRED_RELATIONSHIPS_COMMENT, inferRelationships } from './inference';
 
 export interface Metadata {
   databases?: Database[];
@@ -162,37 +163,57 @@ export const getMetadata = async (conn: DuckDBConnection): Promise<Metadata> => 
   return metadata;
 }
 
-export const generateMermaidCodeForAllDBs = (metadata: Metadata, expandStructs: boolean = false): string | undefined => {
+export const generateMermaidCodeForAllDBs = (
+  metadata: Metadata, expandStructs: boolean = false, infer: boolean = false,
+  inferRegex: RegExp = DEFAULT_INFER_REGEX,
+): string | undefined => {
   let mermaidCode = `erDiagram
   
   `;
 
-  if (metadata.databases && metadata.databases.length > 0 && metadata.databases[0].schemas && metadata.databases[0].schemas?.length > 0) {
-    // Get tables
-    const tables = metadata.databases!.map((db) => db.schemas!.map((s) => s.tables!).flat()).flat();
+  const tables = (metadata.databases ?? []).flatMap(db => (db.schemas ?? []).flatMap(schema =>
+    (schema.tables ?? []).map(table => ({
+      ...table, databaseName: table.databaseName ?? db.name, schemaName: table.schemaName ?? schema.name,
+    })),
+  ));
+  if (tables.length === 0) return undefined;
 
-    if (tables && tables.length > 0) {
-      // Add tables, columns and constraints
-      mermaidCode += tables.map((table) => {
-        return `"${table.databaseName}.${table.name}" {
-${table.columns!.flatMap((column) => {
-  const constraintMarkers = table.constraints?.filter((constraint) => constraint.columnName === column.name).map((constraint) => ((constraint.constraintType === "PRIMARY KEY" ? "PK" : "") || (constraint.constraintType === "FOREIGN KEY" ? "FK" : "") || "")).filter(str => str) ?? [];
-  const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
-  if (structFields.length > 0) {
-    return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
+  const hasForeignKeys = tables.some(table => table.constraints?.some(constraint => constraint.constraintType === 'FOREIGN KEY'));
+  const inferred = infer && !hasForeignKeys ? inferRelationships(tables, inferRegex) : [];
+  const names = new Map<string, number>();
+  for (const table of tables) {
+    const name = `${table.databaseName}.${table.name}`;
+    names.set(name, (names.get(name) ?? 0) + 1);
   }
-  return [`      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${constraintMarkers}${addCommentIfNecessary(column.dataType)}`];
-}).join("\n")}
-    }\n${table.constraints?.filter((constraint) => constraint.constraintType === "FOREIGN KEY").map((constraint) => `    "${table.databaseName}.${constraint.sql.match(/(?:^|)REFERENCES\s([^*]+?)\b\(/i)![1]}" ||--o{ "${table.databaseName}.${table.name}" : has`).join("\n")}`
-      }).join("\n    ")
+  const entityName = (table: Table): string => {
+    const name = `${table.databaseName}.${table.name}`;
+    return inferred.length > 0 && names.get(name)! > 1 ? `${table.databaseName}.${table.schemaName}.${table.name}` : name;
+  };
+  if (inferred.length > 0) mermaidCode += `${INFERRED_RELATIONSHIPS_COMMENT}\n  `;
 
-      return mermaidCode;
-    } else {
-      return undefined;
-    }
-  } else {
-    return undefined;
+  // Add tables, columns and declared constraints without inventing FK markers.
+  mermaidCode += tables.map((table) => {
+    const columns = (table.columns ?? []).flatMap((column) => {
+      const constraintMarkers = table.constraints?.filter((constraint) => constraint.columnName === column.name)
+        .map((constraint) => constraint.constraintType === 'PRIMARY KEY' ? 'PK' : constraint.constraintType === 'FOREIGN KEY' ? 'FK' : '')
+        .filter(Boolean) ?? [];
+      const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
+      if (structFields.length > 0) {
+        return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
+      }
+      return [`      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${constraintMarkers}${addCommentIfNecessary(column.dataType)}`];
+    }).join('\n');
+    const foreignKeys = (table.constraints ?? []).filter((constraint) => constraint.constraintType === 'FOREIGN KEY')
+      .map((constraint) => `    "${table.databaseName}.${constraint.sql.match(/(?:^|)REFERENCES\s([^*]+?)\b\(/i)![1]}" ||--o{ "${table.databaseName}.${table.name}" : has`).join('\n');
+    return `"${entityName(table)}" {\n${columns}\n    }\n${foreignKeys}`;
+  }).join('\n    ');
+
+  if (inferred.length > 0) {
+    mermaidCode += '\n' + inferred.map(({ left, right, columns }) =>
+      `    "${entityName(left)}" }o..o{ "${entityName(right)}" : "inferred: ${columns.join(', ')} (unknown)"`,
+    ).join('\n');
   }
+  return mermaidCode;
 }
 
 export const parseStructFields = (dataType: string): { name: string; type: string }[] => {
