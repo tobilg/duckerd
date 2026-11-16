@@ -32,8 +32,8 @@ Generate an ERD diagram of the database schemas.
 - `--theme-json <json>`: Inline JSON theme overrides, applied after the theme file
 - `-o, --output <path>`: Path to the output file; its extension selects the format unless `-f` is supplied
 - `-m, --mmd-output <path>`: Save the ER diagram source consumed by Pele. Pele accepts Mermaid syntax, so source files keep the `.mmd` extension. No source file is written by default.
-- `-w, --width <width>`: Output canvas width in pixels (default: `1024`)
-- `-H, --height <height>`: Output canvas height in pixels (default: `768`)
+- `-w, --width <width>`: Output canvas width in pixels (default: the diagram's natural size; see [Output size](#output-size))
+- `-H, --height <height>`: Output canvas height in pixels (default: the diagram's natural size)
 - `-f, --outputFormat <format>`: Output format (choices: `svg`, `png`, `pdf`; default: output file extension, or `png`)
 - `-e, --expand-structs`: Expand `STRUCT` columns into individual sub-field rows (e.g. `full_name STRUCT(given VARCHAR, family VARCHAR)` becomes `full_name__given` and `full_name__family`)
 - `--infer`: Infer relationships from matching columns when the entire diagram has no declared foreign keys (disabled by default)
@@ -45,7 +45,16 @@ Generate an ERD diagram of the database schemas.
 duckerd -d ./mydb.duckdb -o ./erd.png -f png -t neutral -w 1600
 ```
 
-Pele produces the SVG directly. PNG exports use `@resvg/resvg-js`; PDF exports use vector paths with PDFKit and `svg-to-pdfkit`. These are normal package dependencies. Diagrams fit within the requested canvas while preserving their aspect ratio. PDF pages use the same dimensions in points.
+Pele produces the SVG directly. PNG exports use `@resvg/resvg-js`; PDF exports use vector paths with PDFKit and `svg-to-pdfkit`. These are normal package dependencies.
+
+### Output size
+
+By default, the canvas matches the diagram's natural size, so text stays readable however many tables there are. To choose a size:
+
+- `-w` alone sets the width; the height follows the diagram's aspect ratio. `-H` alone works the same way.
+- `-w` and `-H` together fit the diagram inside that canvas, preserving its aspect ratio and centering it.
+
+PDF pages use the same dimensions in points. Two limits protect against unusable files. PNG output is reduced to at most 100 megapixels, since larger images need gigabytes of memory to render. PDF output is reduced to at most 14,400 points per side, the largest page common PDF readers open. When a limit applies, DuckERD prints a warning with the reduced size. SVG output is never reduced.
 
 The theme names are retained as DuckERD palettes applied to Pele. Layout and colors differ from the previous renderer.
 

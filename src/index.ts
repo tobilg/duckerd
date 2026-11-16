@@ -20,8 +20,8 @@ interface Options {
   expandStructs?: boolean;
   infer: boolean;
   inferRegex?: RegExp;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   outputFormat?: OutputFormat;
 }
 
@@ -55,8 +55,8 @@ program
   .option('-e, --expand-structs', 'Expand STRUCT type columns into individual sub-field rows')
   .option('--infer', 'Infer relationships when the diagram has no declared foreign keys', false)
   .option('--infer-regex <pattern>', 'Case-insensitive column-name regex for inference (requires --infer; default: _id$)', inferenceRegex)
-  .option('-w, --width <width>', 'Output canvas width in pixels', positiveInteger, 1024)
-  .option('-H, --height <height>', 'Output canvas height in pixels', positiveInteger, 768)
+  .option('-w, --width <width>', 'Output canvas width in pixels (default: natural diagram size; height follows if -H is omitted)', positiveInteger)
+  .option('-H, --height <height>', 'Output canvas height in pixels (default: natural diagram size; width follows if -w is omitted)', positiveInteger)
   .addOption(new Option('-f, --outputFormat <format>', 'Output format (default: output extension or png)').choices([...outputFormats]))
   .action(async (options: Options) => {
     if (options.inferRegex !== undefined && !options.infer) {
@@ -86,7 +86,10 @@ program
       return;
     }
 
-    const image = await renderERD(source, { ...options, theme, format: format as OutputFormat });
+    const image = await renderERD(source, {
+      width: options.width, height: options.height, theme, format: format as OutputFormat,
+      onWarning: (message) => console.warn(`Warning: ${message}`),
+    });
     if (options.mmdOutput) await writeFile(path.resolve(options.mmdOutput), source);
     await writeFile(outputFile, image);
     console.log(`ERD diagram generated: ${outputFile}`);
