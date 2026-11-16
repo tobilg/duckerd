@@ -150,6 +150,7 @@ test('CLI merges a theme file with inline JSON in all output formats without npm
       assert.match(svg, /fill="#eeeeee"/);
       assert.match(svg, /font:20px/);
       assert.match(svg, /font-family:monospace/);
+      assert.doesNotMatch(svg, /@font-face/, 'only the bundled font is embedded');
       assert.match(svg, /rx="0px"/);
     } else if (format === 'png') {
       assert.equal(content.subarray(1, 4).toString(), 'PNG');

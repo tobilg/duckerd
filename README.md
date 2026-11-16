@@ -134,7 +134,7 @@ duckerd -d ./mydb.duckdb -o ./erd.png --theme dark --theme-json '{"colors":{"acc
 
 The color keys are `background`, `foreground`, `muted`, `line`, `surface`, `surfaceAlt`, `border`, and `accent`. Use `#RGB` or `#RRGGBB` colors. Font size must be positive; corner radius must be non-negative, with `0` giving square table corners. Font names can include an unquoted fallback list, such as `Arial, sans-serif`.
 
-Custom themes apply to SVG, PNG, and PDF. PNG/PDF use installed fonts; SVG font appearance also depends on its viewer. Unknown properties and invalid values produce an error before writing output. See the [theme reference](docs/themes.md) for defaults, validation, and combined overrides, and the [complete example](docs/themes/brand.json).
+Custom themes apply to SVG, PNG, and PDF. By default, diagrams use the bundled [IBM Plex Sans Condensed](https://github.com/IBM/plex) font at 14 px. It looks the same on every OS and is embedded in SVG output. Other fonts must be installed where the PNG/PDF is generated, or where the SVG is viewed. Unknown properties and invalid values produce an error before writing output. See the [theme reference](docs/themes.md) for defaults, validation, and combined overrides, and the [complete example](docs/themes/brand.json).
 
 ## Usage example
 

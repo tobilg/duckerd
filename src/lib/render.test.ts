@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { deflateSync, inflateSync } from 'node:zlib';
-import resvg from '@resvg/resvg-js';
+import resvg, { Resvg } from '@resvg/resvg-js';
 import { computeLayout, MAX_PDF_SIDE, MAX_PNG_PIXELS, rasterFonts, renderERD, themeNames } from './render';
-import { parseTheme, resolveTheme } from './themes';
+import { BUNDLED_FONT_FAMILY, BUNDLED_FONT_FILE } from './fonts';
+import { parseTheme, resolveTheme, ThemeDefinition } from './themes';
 import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 
 const pdfDrawingCommands = (pdf: Buffer): string => {
@@ -193,23 +194,25 @@ test('ordinary FK cardinalities remain intact and inference-like text is not a d
   assert.match((await renderERD(labeled, options)).toString(), /class="pele-marker"/);
 });
 
-test('PNG and PDF receive the font as attributes, naming sans-serif fonts before the generic', async (t) => {
+test('PNG and PDF receive the font as attributes, with sans-serif meaning the bundled font', async (t) => {
   const root = '<svg class="pele" style="--_bg:#fff;font:16px sans-serif;color:red;font-family:sans-serif"><text/></svg>';
-  const fonts = "'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', 'Noto Sans'";
-  assert.equal(rasterFonts(root, resolveTheme('default')),
-    `<svg class="pele" style="--_bg:#fff;color:red" font-family="${fonts}, sans-serif" font-size="16"><text/></svg>`);
+  const sans = { ...resolveTheme('default'), fontFamily: 'sans-serif', fontSize: 16 };
+  assert.equal(rasterFonts(root, sans),
+    `<svg class="pele" style="--_bg:#fff;color:red" font-family="'${BUNDLED_FONT_FAMILY}', sans-serif" font-size="16"><text/></svg>`);
+  assert.match(rasterFonts(root, resolveTheme('default')), /font-family="'IBM Plex Sans Condensed', sans-serif" font-size="14"/);
   const mono = { ...resolveTheme('default'), fontFamily: 'Fira Code, monospace', fontSize: 12 };
   assert.match(rasterFonts(root, mono), /^<svg[^>]* font-family="'Fira Code', monospace" font-size="12">/);
   // Generic keywords are case-insensitive; an uppercase one must not be quoted as a font name.
-  const upper = { ...resolveTheme('default'), fontFamily: 'SANS-SERIF', fontSize: 16 };
-  assert.equal(rasterFonts(root, upper), rasterFonts(root, resolveTheme('default')));
+  // With the bundled font, SANS-SERIF must also mean Plex, as sans-serif does.
+  assert.equal(rasterFonts(root, { ...sans, fontFamily: 'SANS-SERIF' }), rasterFonts(root, sans));
+  assert.equal(rasterFonts(root, { ...sans, fontFamily: `${BUNDLED_FONT_FAMILY}, Sans-Serif` }),
+    rasterFonts(root, { ...sans, fontFamily: `${BUNDLED_FONT_FAMILY}, sans-serif` }), 'Plex is named once');
   assert.match(rasterFonts(root, { ...mono, fontFamily: 'Fira Code, MonoSpace' }), /font-family="'Fira Code', monospace"/);
 
   // SVG output keeps Pele's markup; only the resvg input changes.
-  const svg = (await renderERD(source, { format: 'svg', theme: 'default', width: 320, height: 240 })).toString();
+  const svg = (await renderERD(source, { format: 'svg', theme: sans, width: 320, height: 240 })).toString();
   assert.match(svg, /font:16px sans-serif/);
   // Observe the actual renderer input while retaining real PNG/PDF rendering.
-  // Generic serif and sans-serif may resolve to the same installed font in CI.
   const renderer = t.mock.method(resvg, 'Resvg');
   for (const format of ['png', 'pdf'] as const) {
     await renderERD(source, { format, width: 320, height: 240, theme: 'default' });
@@ -218,8 +221,8 @@ test('PNG and PDF receive the font as attributes, naming sans-serif fonts before
   for (const { arguments: [input] } of renderer.mock.calls) {
     const root = input.toString().match(/<svg\b[^>]*class="pele pele-er"[^>]*>/)?.[0];
     assert.ok(root, 'renderer receives the themed diagram');
-    assert.ok(root.includes(`font-family="${fonts}, sans-serif"`));
-    assert.match(root, /font-size="16"/);
+    assert.ok(root.includes(`font-family="'${BUNDLED_FONT_FAMILY}', sans-serif"`));
+    assert.match(root, /font-size="14"/);
     const style = root.match(/\bstyle="([^"]*)"/)?.[1] ?? '';
     assert.doesNotMatch(style, /(?:^|;)\s*font(?:-family)?\s*:/);
   }
@@ -290,4 +293,42 @@ test('rendering without dimensions uses the natural size and warns only when cap
   assert.match(pdf.toString('latin1'), /\/MediaBox \[0 0 14400 14400\]/);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0], /PDF output was reduced to 14400x14400 .*Use SVG output/);
+});
+
+// What renderERD hands resvg for this SVG output, minus the embedded font.
+const rasterInput = (svg: string, theme: ThemeDefinition): string => svg.replace(/<defs>[\s\S]*?<\/defs>/, '')
+  .replace(/<svg\b[^>]*class="pele pele-er"[^>]*>/, (tag) => rasterFonts(tag, theme));
+
+const peleWidth = (svg: string): number => Number(svg.match(/<svg[^>]*class="pele pele-er"[^>]*width="([\d.]+)"/)![1]);
+
+test('default theme uses the bundled font for layout and embeds it in SVG', async () => {
+  const theme = resolveTheme('default');
+  assert.equal(theme.fontFamily, `${BUNDLED_FONT_FAMILY}, sans-serif`);
+  assert.equal(theme.fontSize, 14);
+  const options = { format: 'svg', width: 640, height: 480 } as const;
+  const svg = (await renderERD(source, { ...options, theme })).toString();
+  assert.match(svg, /<defs><style>@font-face\{font-family:'IBM Plex Sans Condensed';src:url\(data:font\/ttf;base64,[A-Za-z0-9+/=]+\) format\('truetype'\);\}<\/style><\/defs>/);
+
+  // Real glyph widths make tables narrower than Pele's generic estimates for the same size.
+  const generic = (await renderERD(source, { ...options, theme: { ...theme, fontFamily: 'sans-serif' } })).toString();
+  assert.ok(peleWidth(svg) < peleWidth(generic), `${peleWidth(svg)} < ${peleWidth(generic)}`);
+  assert.doesNotMatch(generic, /@font-face/);
+});
+
+test('PNG text is drawn with the bundled font, also for missing fonts and generic sans-serif', async () => {
+  const options = { format: 'png', width: 640, height: 480 } as const;
+  const theme = resolveTheme('default');
+  const svg = rasterInput((await renderERD(source, { ...options, format: 'svg', theme })).toString(), theme);
+  // With only the bundled font available, resvg can draw nothing else: identical
+  // pixels mean renderERD used that font, not a system or serif fallback.
+  const onlyBundled = new Resvg(svg, { font: { loadSystemFonts: false, fontFiles: [BUNDLED_FONT_FILE] } }).render().asPng();
+  assert.ok((await renderERD(source, { ...options, theme: 'default' })).equals(onlyBundled));
+  const withoutFonts = new Resvg(svg, { font: { loadSystemFonts: false } }).render().asPng();
+  assert.ok(!onlyBundled.equals(withoutFonts), 'the comparison would detect missing glyphs');
+
+  // Without the measurer, Pele lays out a different diagram; compare against the same layout.
+  const fallback = { ...resolveTheme('default'), fontFamily: 'No Such Font, sans-serif' };
+  const fallbackSvg = rasterInput((await renderERD(source, { ...options, format: 'svg', theme: fallback })).toString(), fallback);
+  const fallbackOnlyBundled = new Resvg(fallbackSvg, { font: { loadSystemFonts: false, fontFiles: [BUNDLED_FONT_FILE] } }).render().asPng();
+  assert.ok((await renderERD(source, { ...options, theme: fallback })).equals(fallbackOnlyBundled));
 });
