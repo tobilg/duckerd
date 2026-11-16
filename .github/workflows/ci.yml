@@ -6,15 +6,20 @@ on:
       - main
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   build-and-test:
-    name: Build and test
+    name: Build and test (${{ matrix.os }})
     if: '!github.event.deleted'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - name: Check out source
@@ -39,14 +44,15 @@ jobs:
       - name: Test
         run: npm test
 
+      # The release package is built once, on Linux.
       - name: Pack tested release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
         run: |
           mkdir -p "$RUNNER_TEMP/npm-package"
           npm pack --pack-destination "$RUNNER_TEMP/npm-package"
 
       - name: Upload release package
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
         uses: actions/upload-artifact@v7
         with:
           name: npm-package

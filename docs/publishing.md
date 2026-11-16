@@ -8,9 +8,9 @@
 | Tag matching `v*` | Install, build, test, and pack; then verify release eligibility and publish in a dependent job |
 | Other branches or tags | No workflow run |
 
-The shared `build-and-test` job runs on both branch and tag pushes. After a successful build and test run, tag runs create an npm tarball with `npm pack` and upload it as a workflow artifact.
+The shared `build-and-test` job runs on both branch and tag pushes, once on Ubuntu and once on Windows. After a successful build and test run, the Ubuntu job of a tag run creates an npm tarball with `npm pack` and uploads it as a workflow artifact.
 
-The `publish` job depends on `build-and-test`. After checking out the tagged source with branch history and setting up Node, it checks that the tagged commit is an ancestor of `origin/main` and that the tag exactly matches `v` followed by the version in `package.json`. Both annotated and lightweight tags work. A release can point to an older commit in `main`'s history; it does not have to be the current branch tip. A tag on an unmerged branch can build and test, but fails this check before the package is downloaded or published.
+The `publish` job depends on `build-and-test` and starts only after both platforms pass. After checking out the tagged source with branch history and setting up Node, it checks that the tagged commit is an ancestor of `origin/main` and that the tag exactly matches `v` followed by the version in `package.json`. Both annotated and lightweight tags work. A release can point to an older commit in `main`'s history; it does not have to be the current branch tip. A tag on an unmerged branch can build and test, but fails this check before the package is downloaded or published.
 
 Once the release checks pass, the publish job downloads and publishes the tested tarball. It does not install project dependencies, rebuild, or rerun tests. A failed build or test prevents the publish job from running, and only the publishing job receives OIDC permissions.
 
