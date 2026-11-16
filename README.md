@@ -34,6 +34,7 @@ Generate an ERD diagram of the database schemas.
 - `-m, --mmd-output <path>`: Save the ER diagram source consumed by Pele. Pele accepts Mermaid syntax, so source files keep the `.mmd` extension. No source file is written by default.
 - `-w, --width <width>`: Output canvas width in pixels (default: the diagram's natural size; see [Output size](#output-size))
 - `-H, --height <height>`: Output canvas height in pixels (default: the diagram's natural size)
+- `--detail <level>`: How much of each table to draw (choices: `full`, `keys`, `names`; default: `full`). See [Large databases](#large-databases).
 - `-f, --outputFormat <format>`: Output format (choices: `svg`, `png`, `pdf`; default: output file extension, or `png`)
 - `-e, --expand-structs`: Expand `STRUCT` columns into individual sub-field rows (e.g. `full_name STRUCT(given VARCHAR, family VARCHAR)` becomes `full_name__given` and `full_name__family`)
 - `--infer`: Infer relationships from matching columns when the entire diagram has no declared foreign keys (disabled by default)
@@ -63,6 +64,21 @@ For SVG output with a saved source file:
 ```bash
 duckerd -d ./mydb.duckdb -o ./erd.svg -m ./erd.mmd
 ```
+
+## Large databases
+
+With 50 or more tables, a diagram showing every column becomes very large. Use `--detail` to draw less of each table:
+
+- `full` (default): every column.
+- `keys`: only primary-key and foreign-key columns, plus columns behind [inferred relationships](#inferring-relationships). Tables without such columns appear as a name-only box.
+- `names`: table names only. All relationships are still drawn, so this gives the most compact overview of the schema.
+
+```bash
+duckerd -d ./mydb.duckdb --detail names -o ./overview.svg
+duckerd -d ./mydb.duckdb --detail keys -o ./keys.svg
+```
+
+The saved `--mmd-output` source reflects the chosen detail level. SVG output suits large diagrams best because viewers can zoom without losing quality.
 
 ## Inferring relationships
 

@@ -176,9 +176,16 @@ export const getMetadata = async (conn: DuckDBConnection): Promise<Metadata> => 
   return metadata;
 }
 
+/**
+ * How much of each table to draw: every column, only key columns (PK, FK, and
+ * columns behind inferred relationships), or the table name alone.
+ */
+export const detailLevels = ['full', 'keys', 'names'] as const;
+export type DetailLevel = typeof detailLevels[number];
+
 export const generateMermaidCodeForAllDBs = (
   metadata: Metadata, expandStructs: boolean = false, infer: boolean = false,
-  inferRegex: RegExp = DEFAULT_INFER_REGEX,
+  inferRegex: RegExp = DEFAULT_INFER_REGEX, detail: DetailLevel = 'full',
 ): string | undefined => {
   let mermaidCode = `erDiagram
   
@@ -206,10 +213,14 @@ export const generateMermaidCodeForAllDBs = (
 
   // Add tables, columns and declared constraints without inventing FK markers.
   mermaidCode += tables.map((table) => {
+    const inferredColumns = new Set(inferred.filter(({ left, right }) => left === table || right === table)
+      .flatMap(({ columns }) => columns.map(column => column.toLowerCase())));
     const columns = (table.columns ?? []).flatMap((column) => {
       const constraintMarkers = table.constraints?.filter((constraint) => constraint.columnName === column.name)
         .map((constraint) => constraint.constraintType === 'PRIMARY KEY' ? 'PK' : constraint.constraintType === 'FOREIGN KEY' ? 'FK' : '')
         .filter(Boolean) ?? [];
+      if (detail === 'names') return [];
+      if (detail === 'keys' && constraintMarkers.length === 0 && !inferredColumns.has(column.name.toLowerCase())) return [];
       const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
       if (structFields.length > 0) {
         return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
@@ -228,7 +239,9 @@ export const generateMermaidCodeForAllDBs = (
     }));
     const foreignKeys = [...referencedTables.values()]
       .map((referenced) => `    "${table.databaseName}.${referenced}" ||--o{ "${table.databaseName}.${table.name}" : ""`).join('\n');
-    return `"${entityName(table)}" {\n${columns}\n    }\n${foreignKeys}`;
+    // Mermaid allows an entity without an attribute block; it renders as a name-only box.
+    const entity = columns ? `"${entityName(table)}" {\n${columns}\n    }` : `"${entityName(table)}"`;
+    return `${entity}\n${foreignKeys}`;
   }).join('\n    ');
 
   if (inferred.length > 0) {

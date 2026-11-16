@@ -8,6 +8,7 @@ import { createERD } from './commands/erd';
 import { OutputFormat, outputFormats, renderERD } from './lib/render';
 import { loadTheme, Theme, themeNames } from './lib/themes';
 import { DEFAULT_INFER_REGEX } from './lib/inference';
+import { DetailLevel, detailLevels } from './lib/metadata';
 import { version } from '../package.json';
 
 interface Options {
@@ -20,6 +21,7 @@ interface Options {
   expandStructs?: boolean;
   infer: boolean;
   inferRegex?: RegExp;
+  detail: DetailLevel;
   width?: number;
   height?: number;
   outputFormat?: OutputFormat;
@@ -55,6 +57,7 @@ program
   .option('-e, --expand-structs', 'Expand STRUCT type columns into individual sub-field rows')
   .option('--infer', 'Infer relationships when the diagram has no declared foreign keys', false)
   .option('--infer-regex <pattern>', 'Case-insensitive column-name regex for inference (requires --infer; default: _id$)', inferenceRegex)
+  .addOption(new Option('--detail <level>', 'Table detail: all columns, key columns only, or table names only').choices([...detailLevels]).default('full'))
   .option('-w, --width <width>', 'Output canvas width in pixels (default: natural diagram size; height follows if -H is omitted)', positiveInteger)
   .option('-H, --height <height>', 'Output canvas height in pixels (default: natural diagram size; width follows if -w is omitted)', positiveInteger)
   .addOption(new Option('-f, --outputFormat <format>', 'Output format (default: output extension or png)').choices([...outputFormats]))
@@ -80,7 +83,9 @@ program
 
     const theme = await loadTheme(options);
     console.log('Generating ERD diagram...');
-    const source = await createERD(dbPath, options.expandStructs ?? false, options.infer, options.inferRegex ?? DEFAULT_INFER_REGEX);
+    const source = await createERD(
+      dbPath, options.expandStructs ?? false, options.infer, options.inferRegex ?? DEFAULT_INFER_REGEX, options.detail,
+    );
     if (!source) {
       console.log('No tables found in the database.');
       return;
