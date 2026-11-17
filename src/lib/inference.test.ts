@@ -24,7 +24,9 @@ const metadata = (...tables: Table[]): Metadata => {
 test('inference matches same-name _id columns case-insensitively without primary keys', () => {
   const orders = table('orders', { ORDER_ID: 'INTEGER' });
   const lineitem = table('lineitem', { order_id: 'INTEGER' });
-  assert.deepEqual(inferRelationships([orders, lineitem]), [{ left: lineitem, right: orders, columns: ['order_id'] }]);
+  assert.deepEqual(inferRelationships([orders, lineitem]), [{
+    left: lineitem, right: orders, columns: ['order_id'], leftColumns: ['order_id'], rightColumns: ['ORDER_ID'],
+  }]);
 });
 
 test('default inference ignores ordinary names, different names, and different full datatypes', () => {

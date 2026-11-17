@@ -69,6 +69,28 @@ test('keys detail keeps columns behind inferred relationships', () => {
   assert.match(source, /inferred: order_id \(unknown\)/);
 });
 
+test('keys detail keeps only the columns that matched an inferred relationship', async (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'duckerd-inferred-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const database = path.join(directory, 'inferred.duckdb');
+  const instance = await DuckDBInstance.create(database);
+  const connection = await instance.connect();
+  try {
+    // "Ä_id" and "ä_id" are distinct DuckDB columns; only the INTEGER ones match.
+    await connection.run(`
+      CREATE TABLE orders ("Ä_id" INTEGER, "ä_id" VARCHAR);
+      CREATE TABLE items ("Ä_id" INTEGER);
+    `);
+  } finally {
+    connection.closeSync();
+    instance.closeSync();
+  }
+  const source = (await createERD(database, false, true, undefined, 'keys'))!;
+  assert.match(source, /"inferred\.items" }o\.\.o\{ "inferred\.orders"/);
+  assert.match(source, /"inferred\.orders" \{\n\s+INTEGER Ä_id \n\s+\}/, 'orders keeps only the matched INTEGER column');
+  assert.doesNotMatch(source, /ä_id/);
+});
+
 test('names detail draws every table without attributes but keeps relationships', async () => {
   const source = generateMermaidCodeForAllDBs(declared, false, false, undefined, 'names')!;
   assert.doesNotMatch(source, /\{\s*$|^\s*\}|INTEGER|VARCHAR/m);
