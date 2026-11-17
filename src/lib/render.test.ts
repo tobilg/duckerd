@@ -242,6 +242,31 @@ test('PNG and PDF canvases are capped, SVG is not', () => {
   assert.equal(computeLayout(huge, 'pdf', 1000, 1000).limited, undefined);
 });
 
+test('the PNG cap holds for the final integer size of very wide and very tall canvases', async () => {
+  const diagram = { width: 300, height: 200 };
+  // The one-pixel side cannot shrink, so the other side takes the whole reduction.
+  assert.deepEqual(computeLayout(diagram, 'png', 400_000_000, 1),
+    { width: MAX_PNG_PIXELS, height: 1, scale: 1 / 200, limited: '100 megapixels' });
+  assert.deepEqual(computeLayout(diagram, 'png', 1, 400_000_000),
+    { width: 1, height: MAX_PNG_PIXELS, scale: 1 / 300, limited: '100 megapixels' });
+
+  for (const [width, height] of [[400_000_000, 1], [1, 400_000_000], [400_000_000, 2], [3, 400_000_000],
+    [400_000_000, undefined], [undefined, 400_000_000], [123_457, 98_765]]) {
+    const layout = computeLayout(diagram, 'png', width, height);
+    const label = `${width}x${height}`;
+    assert.ok(Number.isInteger(layout.width) && Number.isInteger(layout.height), label);
+    assert.ok(layout.width * layout.height <= MAX_PNG_PIXELS, label);
+    assert.ok(diagram.width * layout.scale <= layout.width + 1e-6 && diagram.height * layout.scale <= layout.height + 1e-6, label);
+  }
+
+  // The warning reports the size actually rendered. Stop before allocating it.
+  const warning = await renderERD(source, {
+    format: 'png', theme: 'default', width: 400_000_000, height: 1,
+    onWarning: (message) => { throw new Error(message); },
+  }).then(() => '', (error: Error) => error.message);
+  assert.match(warning, /PNG output was reduced to 100000000x1 /);
+});
+
 test('rendering without dimensions uses the natural size and warns only when capped', async () => {
   const warnings: string[] = [];
   const onWarning = (message: string) => warnings.push(message);

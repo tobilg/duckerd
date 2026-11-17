@@ -54,10 +54,19 @@ export const computeLayout = (
     limited = `${MAX_PDF_SIDE} points per side`;
   }
   if (factor === 1) return layout;
+  let reducedWidth = Math.max(1, Math.floor(layout.width * factor));
+  let reducedHeight = Math.max(1, Math.floor(layout.height * factor));
+  // A side clamped to one pixel can push the area back over the PNG limit
+  // (-w 400000000 -H 1), so the final integer size is checked again.
+  if (format === 'png' && reducedWidth * reducedHeight > MAX_PNG_PIXELS) {
+    if (reducedWidth >= reducedHeight) reducedWidth = Math.floor(MAX_PNG_PIXELS / reducedHeight);
+    else reducedHeight = Math.floor(MAX_PNG_PIXELS / reducedWidth);
+  }
   return {
-    width: Math.max(1, Math.floor(layout.width * factor)),
-    height: Math.max(1, Math.floor(layout.height * factor)),
-    scale: layout.scale * factor,
+    width: reducedWidth,
+    height: reducedHeight,
+    // Keep the requested scale unless the diagram no longer fits the reduced canvas.
+    scale: Math.min(layout.scale, reducedWidth / diagram.width, reducedHeight / diagram.height),
     limited,
   };
 };
