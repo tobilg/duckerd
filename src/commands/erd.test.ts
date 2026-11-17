@@ -77,6 +77,10 @@ test('CLI renders SVG and saves expanded source without a temporary source file 
   assert.match(svg, /class="pele pele-er"/);
   assert.match(svg, /width="800" height="600"/);
   assert.match(readFileSync(source, 'utf8'), /^erDiagram/);
+  // Declared foreign keys draw unlabeled edges; the crow's feet already show the relationship.
+  assert.match(readFileSync(source, 'utf8'), /"sample data\.teams" \|\|--o\{ "sample data\.people" : ""$/m);
+  assert.match(svg, /class="pele-marker"/);
+  assert.doesNotMatch(svg, /pele-edge-label|>has<\/text>/);
   assert.equal(existsSync(path.join(directory, 'schema_erd.mmd')), false);
 });
 

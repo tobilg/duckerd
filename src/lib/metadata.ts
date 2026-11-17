@@ -212,7 +212,7 @@ export const generateMermaidCodeForAllDBs = (
       .filter((constraint) => constraint.constraintType === 'FOREIGN KEY')
       .map((constraint) => [constraint.sql, constraint.referencedTable!]));
     const foreignKeys = [...referencedTables.values()]
-      .map((referenced) => `    "${table.databaseName}.${referenced}" ||--o{ "${table.databaseName}.${table.name}" : has`).join('\n');
+      .map((referenced) => `    "${table.databaseName}.${referenced}" ||--o{ "${table.databaseName}.${table.name}" : ""`).join('\n');
     return `"${entityName(table)}" {\n${columns}\n    }\n${foreignKeys}`;
   }).join('\n    ');
 

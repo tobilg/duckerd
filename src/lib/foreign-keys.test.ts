@@ -38,8 +38,8 @@ test('foreign keys use the referenced table name, once per constraint', async ()
   const source = (await createERD(database))!;
   const edges = source.split('\n').map((line) => line.trim()).filter((line) => line.includes('||--o{'));
   assert.deepEqual(edges.sort(), [
-    '"keys.Location" ||--o{ "keys.child" : has',
-    '"keys.employee" ||--o{ "keys.employee" : has',
-    '"keys.pair" ||--o{ "keys.child" : has',
+    '"keys.Location" ||--o{ "keys.child" : ""',
+    '"keys.employee" ||--o{ "keys.employee" : ""',
+    '"keys.pair" ||--o{ "keys.child" : ""',
   ]);
 });
