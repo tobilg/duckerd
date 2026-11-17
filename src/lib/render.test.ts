@@ -200,6 +200,10 @@ test('PNG and PDF receive the font as attributes, naming sans-serif fonts before
     `<svg class="pele" style="--_bg:#fff;color:red" font-family="${fonts}, sans-serif" font-size="16"><text/></svg>`);
   const mono = { ...resolveTheme('default'), fontFamily: 'Fira Code, monospace', fontSize: 12 };
   assert.match(rasterFonts(root, mono), /^<svg[^>]* font-family="'Fira Code', monospace" font-size="12">/);
+  // Generic keywords are case-insensitive; an uppercase one must not be quoted as a font name.
+  const upper = { ...resolveTheme('default'), fontFamily: 'SANS-SERIF', fontSize: 16 };
+  assert.equal(rasterFonts(root, upper), rasterFonts(root, resolveTheme('default')));
+  assert.match(rasterFonts(root, { ...mono, fontFamily: 'Fira Code, MonoSpace' }), /font-family="'Fira Code', monospace"/);
 
   // SVG output keeps Pele's markup; only the resvg input changes.
   const svg = (await renderERD(source, { format: 'svg', theme: 'default', width: 320, height: 240 })).toString();

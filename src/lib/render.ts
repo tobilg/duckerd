@@ -133,7 +133,9 @@ const SANS_SERIF_FONTS = ['Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans'
  * before the generic. SVG output keeps Pele's markup, which browsers handle.
  */
 export const rasterFonts = (svg: string, theme: ThemeDefinition): string => {
+  // Generic family keywords are case-insensitive in CSS: SANS-SERIF is sans-serif.
   const families = theme.fontFamily.split(',').map((family) => family.trim())
+    .map((family) => GENERIC_FONTS.has(family.toLowerCase()) ? family.toLowerCase() : family)
     .flatMap((family) => family === 'sans-serif' ? [...SANS_SERIF_FONTS, family] : [family]);
   const fontFamily = families.map((family) => GENERIC_FONTS.has(family) ? family : `'${family}'`).join(', ');
   return svg.replace(/^<svg\b[^>]*>/, (tag) => tag
