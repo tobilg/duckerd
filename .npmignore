@@ -40,6 +40,10 @@ docs/
 examples/
 assets/
 
+# Databases, such as the AdventureWorks example build
+*.duckdb
+*.duckdb.wal
+
 # Example ERD outputs
 schema_erd.*
 
