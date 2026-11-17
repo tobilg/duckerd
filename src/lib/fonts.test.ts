@@ -30,6 +30,11 @@ test('labels outside Plex coverage fit inside their tables', async () => {
     }
 `;
   const svg = (await renderERD(source, { format: 'svg', theme: 'default' })).toString();
+  // Without width or height the canvas is the diagram's natural size, drawn at scale 1.
+  const [, outerWidth, outerHeight] = svg.match(/^<svg[^>]*width="(\d+)" height="(\d+)"/)!.map(Number);
+  const inner = svg.match(/<svg[^>]*class="pele pele-er"[^>]*width="([\d.]+)" height="([\d.]+)"/)!;
+  assert.deepEqual([outerWidth, outerHeight], [Math.ceil(Number(inner[1])), Math.ceil(Number(inner[2]))]);
+  assert.match(svg, /<g transform="translate\([\d.]+ [\d.]+\) scale\(1\)">/);
   const rect = svg.match(/<g class="pele-node pele-entity"[^>]*><rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)"/)!;
   const right = Number(rect[1]) + Number(rect[2]);
   const size = Number(svg.match(/<g class="pele-er-attributes" font-size="([\d.]+)"/)![1]);
