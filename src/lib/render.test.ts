@@ -1,12 +1,38 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { inflateSync } from 'node:zlib';
+import { deflateSync, inflateSync } from 'node:zlib';
+import resvg from '@resvg/resvg-js';
 import { rasterFonts, renderERD, themeNames } from './render';
 import { parseTheme, resolveTheme } from './themes';
 import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 
-const pdfDrawingCommands = (pdf: Buffer): string => [...pdf.toString('latin1').matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)]
-  .map((match) => inflateSync(Buffer.from(match[1], 'latin1')).toString()).join('\n');
+const pdfDrawingCommands = (pdf: Buffer): string => {
+  // PDFKit appends Length and Filter after the stream's other dictionary entries,
+  // which can include nested resource dictionaries for vector form objects.
+  const streams = [...pdf.toString('latin1').matchAll(/\/Length\s+(\d+)\s+\/Filter\s+\/FlateDecode\s*>>\r?\nstream\r?\n/g)];
+  assert.ok(streams.length > 0, 'PDF contains drawing streams');
+  return streams.map((match) => {
+    // PDFKit emits direct byte lengths. A delimiter regex can consume a trailing
+    // 0x0d from the compressed payload as part of a supposed CRLF line ending.
+    const start = match.index + match[0].length;
+    return inflateSync(pdf.subarray(start, start + Number(match[1]))).toString();
+  }).join('\n');
+};
+
+test('PDF drawing stream extraction preserves a trailing compressed carriage-return byte', () => {
+  // The padding makes the final Adler-32 checksum byte 0x0d.
+  const commands = '0 0 m\n1 1 l\nS\n% ' + '!'.repeat(219);
+  const compressed = deflateSync(commands);
+  assert.equal(compressed.at(-1), 0x0d);
+  for (const newline of ['\n', '\r\n']) {
+    const stream = Buffer.concat([
+      Buffer.from(`<< /Resources << /ProcSet [/PDF] >> /Length ${compressed.length} /Filter /FlateDecode >>${newline}stream${newline}`),
+      compressed,
+      Buffer.from(`${newline}endstream`),
+    ]);
+    assert.equal(pdfDrawingCommands(stream), commands);
+  }
+});
 
 const firstPngPixel = (png: Buffer): Buffer => {
   assert.equal(png[24], 8, '8-bit PNG');
@@ -167,7 +193,7 @@ test('ordinary FK cardinalities remain intact and inference-like text is not a d
   assert.match((await renderERD(labeled, options)).toString(), /class="pele-marker"/);
 });
 
-test('PNG and PDF receive the font as attributes, naming sans-serif fonts before the generic', async () => {
+test('PNG and PDF receive the font as attributes, naming sans-serif fonts before the generic', async (t) => {
   const root = '<svg class="pele" style="--_bg:#fff;font:16px sans-serif;color:red;font-family:sans-serif"><text/></svg>';
   const fonts = "'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', 'Noto Sans'";
   assert.equal(rasterFonts(root, resolveTheme('default')),
@@ -178,9 +204,19 @@ test('PNG and PDF receive the font as attributes, naming sans-serif fonts before
   // SVG output keeps Pele's markup; only the resvg input changes.
   const svg = (await renderERD(source, { format: 'svg', theme: 'default', width: 320, height: 240 })).toString();
   assert.match(svg, /font:16px sans-serif/);
-  // resvg ignored the theme font before: every family rendered identically.
-  const png = (fontFamily: string) => renderERD(source, {
-    format: 'png', width: 320, height: 240, theme: { ...resolveTheme('default'), fontFamily },
-  });
-  assert.ok(!(await png('sans-serif')).equals(await png('serif')));
+  // Observe the actual renderer input while retaining real PNG/PDF rendering.
+  // Generic serif and sans-serif may resolve to the same installed font in CI.
+  const renderer = t.mock.method(resvg, 'Resvg');
+  for (const format of ['png', 'pdf'] as const) {
+    await renderERD(source, { format, width: 320, height: 240, theme: 'default' });
+  }
+  assert.equal(renderer.mock.callCount(), 2);
+  for (const { arguments: [input] } of renderer.mock.calls) {
+    const root = input.toString().match(/<svg\b[^>]*class="pele pele-er"[^>]*>/)?.[0];
+    assert.ok(root, 'renderer receives the themed diagram');
+    assert.ok(root.includes(`font-family="${fonts}, sans-serif"`));
+    assert.match(root, /font-size="16"/);
+    const style = root.match(/\bstyle="([^"]*)"/)?.[1] ?? '';
+    assert.doesNotMatch(style, /(?:^|;)\s*font(?:-family)?\s*:/);
+  }
 });
