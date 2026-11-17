@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { DuckDBInstance } from '@duckdb/node-api';
+import { createERD } from '../commands/erd';
 import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 import { generateMermaidCodeForAllDBs, type Constraint, type Metadata, type Table } from './metadata';
 import { renderERD } from './render';
@@ -63,4 +68,31 @@ test('names detail draws every table without attributes but keeps relationships'
   assert.match(svg, />db\.people<\/text>/);
   assert.match(svg, /class="pele-marker"/);
   assert.doesNotMatch(svg, />INTEGER<\/text>/);
+});
+
+test('key columns match their constraints case-insensitively, as DuckDB identifiers do', async (t) => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'duckerd-case-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const database = path.join(directory, 'case.duckdb');
+  const instance = await DuckDBInstance.create(database);
+  const connection = await instance.connect();
+  try {
+    // DuckDB reports constraint columns as spelled in the constraint, not the column definition.
+    await connection.run(`
+      CREATE TABLE people ("PersonID" INTEGER, PRIMARY KEY (personid));
+      CREATE TABLE contacts ("MemberID" INTEGER, note VARCHAR, FOREIGN KEY (memberid) REFERENCES people (personid));
+      CREATE TABLE badges (holder INTEGER, PRIMARY KEY ("HOLDER"), FOREIGN KEY ("HOLDER") REFERENCES people ("PERSONID"));
+    `);
+  } finally {
+    connection.closeSync();
+    instance.closeSync();
+  }
+
+  for (const detail of ['keys', 'full'] as const) {
+    const source = (await createERD(database, false, false, undefined, detail))!;
+    assert.match(source, /"case\.people" \{\n\s+INTEGER PersonID PK\n\s+\}/, detail);
+    assert.match(source, /"case\.contacts" \{\n\s+INTEGER MemberID FK\n/, detail);
+    assert.match(source, /"case\.badges" \{\n\s+INTEGER holder PK,FK\n\s+\}/, detail);
+  }
+  assert.doesNotMatch((await createERD(database, false, false, undefined, 'keys'))!, /\bnote\b/);
 });

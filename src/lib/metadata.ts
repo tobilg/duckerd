@@ -211,16 +211,33 @@ export const generateMermaidCodeForAllDBs = (
   };
   if (inferred.length > 0) mermaidCode += `${INFERRED_RELATIONSHIPS_COMMENT}\n  `;
 
+  // Columns behind inferred relationships, per table; only `keys` detail needs them.
+  const inferredColumns = new Map<Table, Set<string>>();
+  if (detail === 'keys') {
+    for (const { left, right, columns } of inferred) {
+      for (const table of [left, right]) {
+        const set = inferredColumns.get(table) ?? new Set<string>();
+        for (const column of columns) set.add(column.toLowerCase());
+        inferredColumns.set(table, set);
+      }
+    }
+  }
+
   // Add tables, columns and declared constraints without inventing FK markers.
   mermaidCode += tables.map((table) => {
-    const inferredColumns = new Set(inferred.filter(({ left, right }) => left === table || right === table)
-      .flatMap(({ columns }) => columns.map(column => column.toLowerCase())));
+    // DuckDB identifiers are case-insensitive, so a constraint may spell its
+    // columns differently from the table definition: PRIMARY KEY (personid).
+    const markers = new Map<string, string[]>();
+    for (const constraint of table.constraints ?? []) {
+      const marker = constraint.constraintType === 'PRIMARY KEY' ? 'PK' : constraint.constraintType === 'FOREIGN KEY' ? 'FK' : '';
+      if (!marker) continue;
+      const column = constraint.columnName.toLowerCase();
+      markers.set(column, [...markers.get(column) ?? [], marker]);
+    }
     const columns = (table.columns ?? []).flatMap((column) => {
-      const constraintMarkers = table.constraints?.filter((constraint) => constraint.columnName === column.name)
-        .map((constraint) => constraint.constraintType === 'PRIMARY KEY' ? 'PK' : constraint.constraintType === 'FOREIGN KEY' ? 'FK' : '')
-        .filter(Boolean) ?? [];
+      const constraintMarkers = markers.get(column.name.toLowerCase()) ?? [];
       if (detail === 'names') return [];
-      if (detail === 'keys' && constraintMarkers.length === 0 && !inferredColumns.has(column.name.toLowerCase())) return [];
+      if (detail === 'keys' && constraintMarkers.length === 0 && !inferredColumns.get(table)?.has(column.name.toLowerCase())) return [];
       const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
       if (structFields.length > 0) {
         return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
