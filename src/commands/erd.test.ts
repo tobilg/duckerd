@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { DuckDBInstance } from '@duckdb/node-api';
 import { renderERD } from '../lib/render';
 
@@ -11,7 +12,8 @@ const directory = mkdtempSync(path.join(tmpdir(), 'duckerd-pele-'));
 const database = path.join(directory, 'sample data.duckdb');
 const inferenceDatabase = path.join(directory, 'inference.duckdb');
 const cli = path.resolve(__dirname, '../index.ts');
-const loader = require.resolve('tsx');
+// Node's --import needs a file URL; a bare Windows path (C:\...) is read as a URL scheme.
+const loader = pathToFileURL(require.resolve('tsx')).href;
 const run = (...args: string[]) => spawnSync(process.execPath, ['--import', loader, cli, ...args], {
   cwd: directory,
   encoding: 'utf8',
