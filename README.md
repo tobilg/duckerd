@@ -65,6 +65,10 @@ For SVG output with a saved source file:
 duckerd -d ./mydb.duckdb -o ./erd.svg -m ./erd.mmd
 ```
 
+### Table names
+
+Each table is named `database.table`. Tables that share a name in different schemas of the same database are named `database.schema.table` instead, so they stay separate boxes.
+
 ## Large databases
 
 With 50 or more tables, a diagram showing every column becomes very large. Use `--detail` to draw less of each table:
@@ -92,7 +96,7 @@ By default, columns qualify when their names end in `_id`. Two tables in the sam
 
 Inferred links are dashed, with no cardinality markers in SVG, PNG, or PDF. They indicate possible relationships based on metadata; DuckERD does not inspect row values, determine cardinality, or mark inferred columns as foreign keys. If any declared foreign key exists anywhere in the diagram, inference is skipped entirely and the declared relationships are retained.
 
-Matching is limited to top-level columns; `--expand-structs` does not make nested fields eligible. If three tables share a matching column, all three table pairs are linked. Multiple matching columns between a pair appear on one edge with a sorted list of names; this does not imply a composite key. When inference produces links, table names that collide across schemas are qualified as `database.schema.table`; other names retain `database.table`.
+Matching is limited to top-level columns; `--expand-structs` does not make nested fields eligible. If three tables share a matching column, all three table pairs are linked. Multiple matching columns between a pair appear on one edge with a sorted list of names; this does not imply a composite key.
 
 ### Custom column-name patterns
 

@@ -211,10 +211,10 @@ export const generateMermaidCodeForAllDBs = (
     const name = `${table.databaseName}.${table.name}`;
     names.set(name, (names.get(name) ?? 0) + 1);
   }
-  const entityName = (table: Table): string => {
-    const name = `${table.databaseName}.${table.name}`;
-    return inferred.length > 0 && names.get(name)! > 1 ? `${table.databaseName}.${table.schemaName}.${table.name}` : name;
-  };
+  // Tables that share a name across schemas would merge into one entity; qualify them with the schema.
+  const qualifiedName = (databaseName: string, schemaName: string, name: string): string =>
+    (names.get(`${databaseName}.${name}`) ?? 0) > 1 ? `${databaseName}.${schemaName}.${name}` : `${databaseName}.${name}`;
+  const entityName = (table: Table): string => qualifiedName(table.databaseName!, table.schemaName!, table.name);
   if (inferred.length > 0) mermaidCode += `${INFERRED_RELATIONSHIPS_COMMENT}\n  `;
 
   // Columns behind inferred relationships, per table; only `keys` detail needs them.
@@ -251,7 +251,7 @@ export const generateMermaidCodeForAllDBs = (
       return [`      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${constraintMarkers}${addCommentIfNecessary(column.dataType)}`];
     }).join('\n');
     // Composite keys have one row per column; draw one edge per constraint. DuckDB
-    // keeps foreign keys within a schema, so the referenced table shares this prefix.
+    // keeps foreign keys within a schema, so the referenced table shares this schema.
     const referencedTables = new Map((table.constraints ?? []).flatMap((constraint) => {
       if (constraint.constraintType !== 'FOREIGN KEY') return [];
       // Hand-built metadata could omit the target, which would draw a table named "undefined".
@@ -261,7 +261,7 @@ export const generateMermaidCodeForAllDBs = (
       return [[constraint.sql, constraint.referencedTable] as const];
     }));
     const foreignKeys = [...referencedTables.values()]
-      .map((referenced) => `    "${table.databaseName}.${referenced}" ||--o{ "${table.databaseName}.${table.name}" : ""`).join('\n');
+      .map((referenced) => `    "${qualifiedName(table.databaseName, table.schemaName, referenced)}" ||--o{ "${entityName(table)}" : ""`).join('\n');
     // Mermaid allows an entity without an attribute block; it renders as a name-only box.
     const entity = columns ? `"${entityName(table)}" {\n${columns}\n    }` : `"${entityName(table)}"`;
     return `${entity}\n${foreignKeys}`;
