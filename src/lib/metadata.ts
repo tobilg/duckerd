@@ -217,13 +217,13 @@ export const generateMermaidCodeForAllDBs = (
   };
   if (inferred.length > 0) mermaidCode += `${INFERRED_RELATIONSHIPS_COMMENT}\n  `;
 
-  // Columns behind inferred relationships, per table; only `keys` detail needs them.
+  // The exact columns behind inferred relationships, per table; only `keys` detail needs them.
   const inferredColumns = new Map<Table, Set<string>>();
   if (detail === 'keys') {
-    for (const { left, right, columns } of inferred) {
-      for (const table of [left, right]) {
+    for (const { left, right, leftColumns, rightColumns } of inferred) {
+      for (const [table, columns] of [[left, leftColumns], [right, rightColumns]] as const) {
         const set = inferredColumns.get(table) ?? new Set<string>();
-        for (const column of columns) set.add(column.toLowerCase());
+        for (const column of columns) set.add(column);
         inferredColumns.set(table, set);
       }
     }
@@ -243,7 +243,7 @@ export const generateMermaidCodeForAllDBs = (
     const columns = (table.columns ?? []).flatMap((column) => {
       const constraintMarkers = markers.get(foldIdentifier(column.name)) ?? [];
       if (detail === 'names') return [];
-      if (detail === 'keys' && constraintMarkers.length === 0 && !inferredColumns.get(table)?.has(column.name.toLowerCase())) return [];
+      if (detail === 'keys' && constraintMarkers.length === 0 && !inferredColumns.get(table)?.has(column.name)) return [];
       const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
       if (structFields.length > 0) {
         return structFields.map((field) => `      ${sanitizeDataType(field.type.toUpperCase())} ${field.name}`);
