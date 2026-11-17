@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { deflateSync, inflateSync } from 'node:zlib';
 import resvg, { Resvg } from '@resvg/resvg-js';
 import { computeLayout, MAX_PDF_SIDE, MAX_PNG_PIXELS, rasterFonts, renderERD, themeNames } from './render';
@@ -307,7 +308,10 @@ test('default theme uses the bundled font for layout and embeds it in SVG', asyn
   assert.equal(theme.fontSize, 14);
   const options = { format: 'svg', width: 640, height: 480 } as const;
   const svg = (await renderERD(source, { ...options, theme })).toString();
-  assert.match(svg, /<defs><style>@font-face\{font-family:'IBM Plex Sans Condensed';src:url\(data:font\/ttf;base64,[A-Za-z0-9+/=]+\) format\('truetype'\);\}<\/style><\/defs>/);
+  // The whole font, as IBM's WOFF2 build: browsers reject partial or malformed font tables.
+  const embedded = svg.match(/<defs><style>@font-face\{font-family:'IBM Plex Sans Condensed';src:url\(data:font\/woff2;base64,([A-Za-z0-9+/=]+)\) format\('woff2'\);\}<\/style><\/defs>/);
+  assert.ok(embedded, 'SVG embeds the bundled font');
+  assert.ok(Buffer.from(embedded[1], 'base64').equals(readFileSync(BUNDLED_FONT_FILE.replace(/\.ttf$/, '.woff2'))));
 
   // Real glyph widths make tables narrower than Pele's generic estimates for the same size.
   const generic = (await renderERD(source, { ...options, theme: { ...theme, fontFamily: 'sans-serif' } })).toString();

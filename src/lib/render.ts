@@ -169,7 +169,7 @@ export const renderERD = async (source: string, options: RenderOptions): Promise
   const diagramSvg = source.split(/\r?\n/).some(line => line.trim() === INFERRED_RELATIONSHIPS_COMMENT)
     ? removeInferredMarkers(diagram.svg) : diagram.svg;
   const themed = applyTheme(diagramSvg, theme);
-  const fontFace = options.format === 'svg' && bundled ? `\n<defs><style>${embeddedFontFace(themed)}</style></defs>` : '';
+  const fontFace = options.format === 'svg' && bundled ? `\n<defs><style>${embeddedFontFace()}</style></defs>` : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${fontFace}
 <rect width="100%" height="100%" fill="${theme.colors.background}"/>
 <g transform="translate(${x} ${y}) scale(${scale})">${options.format === 'svg' ? themed : rasterFonts(themed, theme)}</g>

@@ -40,7 +40,8 @@ DuckERD ships [IBM Plex Sans Condensed](https://github.com/IBM/plex) (SIL Open F
 
 - Tables are sized from the font's real glyph widths, so boxes fit their text closely.
 - PNG and PDF output looks the same on every operating system, whatever fonts are installed.
-- SVG output embeds a small subset of the font (about 20 KB), so viewers show the same font that the layout was measured with.
+- SVG output embeds the whole font as WOFF2 (about 49 KB of base64), so viewers show the same font that the layout was measured with.
+- The font covers Latin scripts. Other characters, such as Chinese, Japanese, Korean, Cyrillic, or emoji, are drawn with a fallback font from the viewer or the machine generating the file, and tables are sized for them from generic width estimates.
 
 With any other font first, PNG and PDF use the fonts installed on the machine generating the file, and SVG uses the fonts available in its viewer. Pele then sizes tables from generic width estimates, so text may fit more loosely or slightly overflow. When a requested font is not installed, PNG and PDF fall back to the bundled font. In PNG and PDF, the generic `sans-serif` also means the bundled font, because the renderer would otherwise pick an arbitrary installed font (on some Windows machines, a serif one).
 
