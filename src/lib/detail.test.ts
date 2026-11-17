@@ -18,6 +18,15 @@ const pk = (columnName: string): Constraint => ({ columnName, constraintType: 'P
 const fk = (columnName: string, target: string): Constraint => ({
   columnName, constraintType: 'FOREIGN KEY', referencedTable: target, sql: `FOREIGN KEY (${columnName}) REFERENCES ${target}(id)`,
 });
+
+/** Without width or height, the canvas takes the diagram's natural size. */
+const assertNaturalSize = (svg: string): void => {
+  const [, width, height] = svg.match(/^<svg[^>]*width="([^"]*)" height="([^"]*)" viewBox="0 0 ([^"]*)"/)!;
+  assert.ok(Number(width) > 0 && Number(height) > 0, `outer size ${width}x${height}`);
+  const inner = svg.match(/<svg[^>]*class="pele pele-er"[^>]*width="([\d.]+)" height="([\d.]+)"/)!;
+  assert.deepEqual([Number(width), Number(height)], [Math.ceil(Number(inner[1])), Math.ceil(Number(inner[2]))]);
+};
+
 const metadata = (...tables: Table[]): Metadata => ({ databases: [{ name: 'db', schemas: [{ name: 'main', tables }] }] });
 
 const declared = metadata(
@@ -43,6 +52,7 @@ test('keys detail keeps only PK and FK columns and draws keyless tables as names
   assert.match(source, /^\s*"db\.notes"$/m);
   assert.match(source, /"db\.teams" \|\|--o\{ "db\.people" : ""$/m);
   const svg = (await renderERD(source, { format: 'svg', theme: 'default' })).toString();
+  assertNaturalSize(svg);
   assert.match(svg, />team_id<\/text>/);
   assert.match(svg, />db\.notes<\/text>/);
 });
@@ -65,12 +75,13 @@ test('names detail draws every table without attributes but keeps relationships'
   for (const name of ['teams', 'people', 'notes']) assert.match(source, new RegExp(`^\\s*"db\\.${name}"$`, 'm'));
   assert.match(source, /"db\.teams" \|\|--o\{ "db\.people" : ""$/m);
   const svg = (await renderERD(source, { format: 'svg', theme: 'default' })).toString();
+  assertNaturalSize(svg);
   assert.match(svg, />db\.people<\/text>/);
   assert.match(svg, /class="pele-marker"/);
   assert.doesNotMatch(svg, />INTEGER<\/text>/);
 });
 
-test('key columns match their constraints case-insensitively, as DuckDB identifiers do', async (t) => {
+test('key columns match their constraints as DuckDB does, folding only ASCII letters', async (t) => {
   const directory = mkdtempSync(path.join(tmpdir(), 'duckerd-case-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   const database = path.join(directory, 'case.duckdb');
@@ -82,6 +93,9 @@ test('key columns match their constraints case-insensitively, as DuckDB identifi
       CREATE TABLE people ("PersonID" INTEGER, PRIMARY KEY (personid));
       CREATE TABLE contacts ("MemberID" INTEGER, note VARCHAR, FOREIGN KEY (memberid) REFERENCES people (personid));
       CREATE TABLE badges (holder INTEGER, PRIMARY KEY ("HOLDER"), FOREIGN KEY ("HOLDER") REFERENCES people ("PERSONID"));
+      -- DuckDB folds only A-Z: "Ä" and "ä" are distinct columns, while "ÉMILE" names "Émile".
+      CREATE TABLE letters ("Ä" INTEGER PRIMARY KEY, "ä" VARCHAR);
+      CREATE TABLE names ("Émile" INTEGER, PRIMARY KEY ("ÉMILE"));
     `);
   } finally {
     connection.closeSync();
@@ -93,6 +107,11 @@ test('key columns match their constraints case-insensitively, as DuckDB identifi
     assert.match(source, /"case\.people" \{\n\s+INTEGER PersonID PK\n\s+\}/, detail);
     assert.match(source, /"case\.contacts" \{\n\s+INTEGER MemberID FK\n/, detail);
     assert.match(source, /"case\.badges" \{\n\s+INTEGER holder PK,FK\n\s+\}/, detail);
+    assert.match(source, /"case\.names" \{\n\s+INTEGER Émile PK\n\s+\}/, detail);
   }
-  assert.doesNotMatch((await createERD(database, false, false, undefined, 'keys'))!, /\bnote\b/);
+  const full = (await createERD(database, false, false, undefined, 'full'))!;
+  assert.match(full, /"case\.letters" \{\n\s+INTEGER Ä PK\n\s+VARCHAR ä \n\s+\}/, 'ä has no key marker');
+  const keys = (await createERD(database, false, false, undefined, 'keys'))!;
+  assert.match(keys, /"case\.letters" \{\n\s+INTEGER Ä PK\n\s+\}/, 'keys omits ä');
+  assert.doesNotMatch(keys, /\bnote\b/);
 });

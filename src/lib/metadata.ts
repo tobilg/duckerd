@@ -183,6 +183,12 @@ export const getMetadata = async (conn: DuckDBConnection): Promise<Metadata> => 
 export const detailLevels = ['full', 'keys', 'names'] as const;
 export type DetailLevel = typeof detailLevels[number];
 
+/**
+ * Folds an identifier the way DuckDB compares them: ASCII letters only, so
+ * "Ä" and "ä" stay distinct while "PersonID" and "personid" match.
+ */
+const foldIdentifier = (name: string): string => name.replace(/[A-Z]+/g, (letters) => letters.toLowerCase());
+
 export const generateMermaidCodeForAllDBs = (
   metadata: Metadata, expandStructs: boolean = false, infer: boolean = false,
   inferRegex: RegExp = DEFAULT_INFER_REGEX, detail: DetailLevel = 'full',
@@ -231,11 +237,11 @@ export const generateMermaidCodeForAllDBs = (
     for (const constraint of table.constraints ?? []) {
       const marker = constraint.constraintType === 'PRIMARY KEY' ? 'PK' : constraint.constraintType === 'FOREIGN KEY' ? 'FK' : '';
       if (!marker) continue;
-      const column = constraint.columnName.toLowerCase();
+      const column = foldIdentifier(constraint.columnName);
       markers.set(column, [...markers.get(column) ?? [], marker]);
     }
     const columns = (table.columns ?? []).flatMap((column) => {
-      const constraintMarkers = markers.get(column.name.toLowerCase()) ?? [];
+      const constraintMarkers = markers.get(foldIdentifier(column.name)) ?? [];
       if (detail === 'names') return [];
       if (detail === 'keys' && constraintMarkers.length === 0 && !inferredColumns.get(table)?.has(column.name.toLowerCase())) return [];
       const structFields = expandStructs ? expandStructFields(column.name, column.dataType) : [];
