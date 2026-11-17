@@ -204,6 +204,28 @@ test('CLI inference is opt-in, scopes links to schemas, and preserves saved-sour
   assert.equal(svg, (await renderERD(source, { format: 'svg', theme: 'default' })).toString());
 });
 
+test('CLI --detail trims columns from the saved source and the diagram', () => {
+  const heights: Record<string, number> = {};
+  for (const detail of ['full', 'keys', 'names']) {
+    const result = run('-d', database, '--detail', detail, '-o', `detail-${detail}.svg`, '-m', `detail-${detail}.mmd`);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stderr, '');
+    // The inner Pele SVG carries the diagram's own size, before fitting to the canvas.
+    const svg = readFileSync(path.join(directory, `detail-${detail}.svg`), 'utf8');
+    heights[detail] = Number(svg.match(/<svg[^>]*class="pele pele-er"[^>]*height="([\d.]+)"/)![1]);
+  }
+  const keys = readFileSync(path.join(directory, 'detail-keys.mmd'), 'utf8');
+  assert.match(keys, /team_id FK/);
+  assert.doesNotMatch(keys, /full_name|status|score/);
+  assert.match(keys, /^\s*"sample data\.orders"$/m, 'keyless tables keep a name-only box');
+  assert.doesNotMatch(readFileSync(path.join(directory, 'detail-names.mmd'), 'utf8'), /\{\s*$|^\s*\}/m);
+  assert.ok(heights.names < heights.keys && heights.keys < heights.full, JSON.stringify(heights));
+
+  const invalid = run('-d', database, '--detail', 'some', '-o', 'detail-invalid.svg');
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /--detail.*Allowed choices are full, keys, names/);
+});
+
 test('CLI custom inference regex replaces the default in SVG, PNG, and PDF', () => {
   for (const format of ['svg', 'png', 'pdf']) {
     const output = `inferred-key.${format}`;
