@@ -70,6 +70,8 @@ export interface Constraint {
   tableName?: string;
   columnName: string;
   constraintType: string;
+  /** The table a foreign key references, unquoted and without a schema. */
+  referencedTable?: string;
   sql: string;
 }
 
@@ -93,7 +95,7 @@ const columnsMetadataQuery = `SELECT database_name as databaseName, schema_name 
 // Index metadata query
 const indexesMetadataQuery = `SELECT database_name as databaseName, schema_name as schemaName, table_name as tableName, index_name as name, is_unique as isUnique, sql FROM duckdb_indexes() ORDER BY database_name, schema_name, table_name, index_name`;
 // Constraints metadata query
-const contraintsMetadataQuery = `SELECT database_name as databaseName, schema_name as schemaName, table_name as tableName, unnest(constraint_column_names) as columnName, constraint_type as constraintType, constraint_text as sql FROM duckdb_constraints() ORDER BY database_name, schema_name, table_name`;
+const contraintsMetadataQuery = `SELECT database_name as databaseName, schema_name as schemaName, table_name as tableName, unnest(constraint_column_names) as columnName, constraint_type as constraintType, referenced_table as referencedTable, constraint_text as sql FROM duckdb_constraints() ORDER BY database_name, schema_name, table_name`;
 // Constraints metadata query
 const sequencesMetadataQuery = `SELECT database_name as databaseName, schema_name as schemaName, sequence_name as name, temporary as isTemporary, start_value as startValue, last_value as lastValue, min_value as minValue, max_value as maxValue, increment_by as incrementBy, sql FROM duckdb_sequences() ORDER BY database_name, schema_name, sequence_name`;
 
@@ -140,6 +142,7 @@ export const getMetadata = async (conn: DuckDBConnection): Promise<Metadata> => 
         constraints: [...new Set(constraints.filter((constraint) => constraint.databaseName === table.databaseName && constraint.schemaName === table.schemaName && constraint.tableName === table.name).map(constraint => ({
           columnName: constraint.columnName,
           constraintType: constraint.constraintType,
+          referencedTable: constraint.referencedTable ?? undefined,
           sql: constraint.sql,
         }) as Constraint))],
       })))],
@@ -203,8 +206,13 @@ export const generateMermaidCodeForAllDBs = (
       }
       return [`      ${sanitizeDataType(column.dataType.toUpperCase())} ${column.name} ${constraintMarkers}${addCommentIfNecessary(column.dataType)}`];
     }).join('\n');
-    const foreignKeys = (table.constraints ?? []).filter((constraint) => constraint.constraintType === 'FOREIGN KEY')
-      .map((constraint) => `    "${table.databaseName}.${constraint.sql.match(/(?:^|)REFERENCES\s([^*]+?)\b\(/i)![1]}" ||--o{ "${table.databaseName}.${table.name}" : has`).join('\n');
+    // Composite keys have one row per column; draw one edge per constraint. DuckDB
+    // keeps foreign keys within a schema, so the referenced table shares this prefix.
+    const referencedTables = new Map((table.constraints ?? [])
+      .filter((constraint) => constraint.constraintType === 'FOREIGN KEY')
+      .map((constraint) => [constraint.sql, constraint.referencedTable!]));
+    const foreignKeys = [...referencedTables.values()]
+      .map((referenced) => `    "${table.databaseName}.${referenced}" ||--o{ "${table.databaseName}.${table.name}" : has`).join('\n');
     return `"${entityName(table)}" {\n${columns}\n    }\n${foreignKeys}`;
   }).join('\n    ');
 
