@@ -32,7 +32,7 @@ All properties are optional. Copy [the complete example](themes/brand.json) to `
 | `fontSize` | Finite positive number, in pixels | `16` |
 | `borderRadius` | Finite non-negative number, in pixels; `0` gives square table corners | `4` |
 
-Font names accept letters, numbers, spaces, hyphens, and underscores. Font settings are passed to Pele before it lays out the diagram. PNG and PDF use fonts available on the machine generating the file; SVG uses fonts available in its viewer. Font files are not embedded in SVG or downloaded. PDF text is exported as vector paths.
+Font names accept letters, numbers, spaces, hyphens, and underscores. Font settings are passed to Pele before it lays out the diagram. PNG and PDF use fonts available on the machine generating the file; SVG uses fonts available in its viewer. Font files are not embedded in SVG or downloaded. PDF text is exported as vector paths. In PNG and PDF, the generic `sans-serif` tries Arial, Helvetica, Liberation Sans, DejaVu Sans, and Noto Sans first, because the renderer would otherwise pick an arbitrary installed font (on some Windows machines, a serif one).
 
 Font size and corner radius apply to the diagram before it is scaled to fit the output canvas. Changing the font size affects layout; the final displayed size also depends on `--width` and `--height`. Corner radius applies to table rectangles; relationship label backgrounds retain Pele's own small radius.
 

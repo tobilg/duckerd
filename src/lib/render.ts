@@ -66,6 +66,28 @@ const removeInferredMarkers = (svg: string): string => svg.replace(
   edge => edge.replace(/<(?:path|circle)\b[^>]*\bclass="pele-marker"[^>]*\/>/g, ''),
 );
 
+const GENERIC_FONTS = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui']);
+const SANS_SERIF_FONTS = ['Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', 'Noto Sans'];
+
+/**
+ * Prepares Pele's SVG for resvg, which has two bugs that turn PNG and PDF text serif:
+ * - It ignores style declarations that follow a CSS custom property, so it never
+ *   sees the font in Pele's root style, which starts with `--_bg:...`.
+ * - It resolves the generic `sans-serif` to an arbitrary installed font (Book
+ *   Antiqua, a serif, on some Windows machines) and ignores `sansSerifFamily`.
+ * The font moves into presentation attributes, with common sans-serif fonts named
+ * before the generic. SVG output keeps Pele's markup, which browsers handle.
+ */
+export const rasterFonts = (svg: string, theme: ThemeDefinition): string => {
+  const families = theme.fontFamily.split(',').map((family) => family.trim())
+    .flatMap((family) => family === 'sans-serif' ? [...SANS_SERIF_FONTS, family] : [family]);
+  const fontFamily = families.map((family) => GENERIC_FONTS.has(family) ? family : `'${family}'`).join(', ');
+  return svg.replace(/^<svg\b[^>]*>/, (tag) => tag
+    .replace(/\sstyle="([^"]*)"/, (_, style: string) =>
+      ` style="${style.split(';').filter((declaration) => !/^\s*font(?:-family)?\s*:/.test(declaration)).join(';')}"`)
+    .replace(/>$/, ` font-family="${fontFamily}" font-size="${theme.fontSize}">`));
+};
+
 export const renderERD = async (source: string, options: RenderOptions): Promise<Buffer> => {
   const theme = typeof options.theme === 'string' ? resolveTheme(options.theme) : options.theme;
   const diagram = render(source, {
@@ -78,9 +100,10 @@ export const renderERD = async (source: string, options: RenderOptions): Promise
   // identifies diagrams whose dashed edges use placeholders for unknown values.
   const diagramSvg = source.split(/\r?\n/).some(line => line.trim() === INFERRED_RELATIONSHIPS_COMMENT)
     ? removeInferredMarkers(diagram.svg) : diagram.svg;
+  const themed = applyTheme(diagramSvg, theme);
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}" viewBox="0 0 ${options.width} ${options.height}">
 <rect width="100%" height="100%" fill="${theme.colors.background}"/>
-<g transform="translate(${x} ${y}) scale(${scale})">${applyTheme(diagramSvg, theme)}</g>
+<g transform="translate(${x} ${y}) scale(${scale})">${options.format === 'svg' ? themed : rasterFonts(themed, theme)}</g>
 </svg>`;
 
   if (options.format === 'svg') return Buffer.from(svg);

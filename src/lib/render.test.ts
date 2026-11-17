@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { inflateSync } from 'node:zlib';
-import { renderERD, themeNames } from './render';
+import { rasterFonts, renderERD, themeNames } from './render';
 import { parseTheme, resolveTheme } from './themes';
 import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 
@@ -165,4 +165,22 @@ test('ordinary FK cardinalities remain intact and inference-like text is not a d
 
   const labeled = source.replace(': has', `: "${INFERRED_RELATIONSHIPS_COMMENT}"`).replace('||--o{', '}o..o{');
   assert.match((await renderERD(labeled, options)).toString(), /class="pele-marker"/);
+});
+
+test('PNG and PDF receive the font as attributes, naming sans-serif fonts before the generic', async () => {
+  const root = '<svg class="pele" style="--_bg:#fff;font:16px sans-serif;color:red;font-family:sans-serif"><text/></svg>';
+  const fonts = "'Arial', 'Helvetica', 'Liberation Sans', 'DejaVu Sans', 'Noto Sans'";
+  assert.equal(rasterFonts(root, resolveTheme('default')),
+    `<svg class="pele" style="--_bg:#fff;color:red" font-family="${fonts}, sans-serif" font-size="16"><text/></svg>`);
+  const mono = { ...resolveTheme('default'), fontFamily: 'Fira Code, monospace', fontSize: 12 };
+  assert.match(rasterFonts(root, mono), /^<svg[^>]* font-family="'Fira Code', monospace" font-size="12">/);
+
+  // SVG output keeps Pele's markup; only the resvg input changes.
+  const svg = (await renderERD(source, { format: 'svg', theme: 'default', width: 320, height: 240 })).toString();
+  assert.match(svg, /font:16px sans-serif/);
+  // resvg ignored the theme font before: every family rendered identically.
+  const png = (fontFamily: string) => renderERD(source, {
+    format: 'png', width: 320, height: 240, theme: { ...resolveTheme('default'), fontFamily },
+  });
+  assert.ok(!(await png('sans-serif')).equals(await png('serif')));
 });
