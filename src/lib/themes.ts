@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { BUNDLED_FONT_FAMILY } from './fonts';
 
 export const themeNames = ['default', 'forest', 'dark', 'neutral'] as const;
 export type Theme = typeof themeNames[number];
@@ -94,7 +95,7 @@ export const parseTheme = (json: string, source: string = '--theme-json'): Theme
 
 export const resolveTheme = (preset: Theme = 'default', ...overrides: ThemeOverrides[]): ThemeDefinition => {
   let theme: ThemeDefinition = {
-    colors: { ...palettes[preset] }, fontFamily: 'sans-serif', fontSize: 16, borderRadius: 4,
+    colors: { ...palettes[preset] }, fontFamily: `${BUNDLED_FONT_FAMILY}, sans-serif`, fontSize: 14, borderRadius: 4,
   };
   for (const override of overrides) {
     theme = { ...theme, ...override, colors: { ...theme.colors, ...override.colors } };

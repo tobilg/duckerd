@@ -8,12 +8,12 @@ From the repository root, after `npm install`:
 
 ```bash
 npx tsx examples/adventureworks/build.ts adventureworks.duckdb
-npm start -- -d adventureworks.duckdb -o adventureworks.svg -w 10813 -H 5246
+npm start -- -d adventureworks.duckdb -o adventureworks.svg
 ```
 
 `build.ts` refuses to overwrite an existing file; pass `--force` to replace it. `npm start --` runs the CLI from this checkout; with DuckERD installed globally, use `duckerd` instead.
 
-The diagram's natural size is about 10813 × 5246 pixels. With the default 1024 × 768 canvas it would be drawn at about 9% scale, too small to read, so the command passes a canvas of about that size. SVG output suits diagrams this size, since viewers can zoom without losing quality.
+The output takes the diagram's natural size, about 8700 × 4800 pixels. SVG output suits diagrams this size, since viewers can zoom without losing quality.
 
 ## Differences from the original
 

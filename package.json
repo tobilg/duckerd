@@ -33,11 +33,13 @@
     "@duckdb/node-api": "^2.0.0-r.1",
     "@resvg/resvg-js": "^2.6.2",
     "commander": "^15.0.0",
+    "fontkit": "^2.0.4",
     "pdfkit": "^0.20.2",
     "pele": "^1.10.0",
     "svg-to-pdfkit": "^0.1.8"
   },
   "devDependencies": {
+    "@types/fontkit": "^2.0.9",
     "@types/node": "^24.19.2",
     "@types/pdfkit": "^0.17.7",
     "@types/svg-to-pdfkit": "^0.1.4",

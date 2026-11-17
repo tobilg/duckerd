@@ -28,11 +28,22 @@ All properties are optional. Copy [the complete example](themes/brand.json) to `
 | Property | Accepted value | Default |
 | --- | --- | --- |
 | `colors` | Object containing any of the eight colors below | Selected preset |
-| `fontFamily` | Unquoted font name or comma-separated list, such as `Arial, sans-serif` | `sans-serif` |
-| `fontSize` | Finite positive number, in pixels | `16` |
+| `fontFamily` | Unquoted font name or comma-separated list, such as `Arial, sans-serif` | `IBM Plex Sans Condensed, sans-serif` |
+| `fontSize` | Finite positive number, in pixels | `14` |
 | `borderRadius` | Finite non-negative number, in pixels; `0` gives square table corners | `4` |
 
-Font names accept letters, numbers, spaces, hyphens, and underscores. Font settings are passed to Pele before it lays out the diagram. PNG and PDF use fonts available on the machine generating the file; SVG uses fonts available in its viewer. Font files are not embedded in SVG or downloaded. PDF text is exported as vector paths. In PNG and PDF, the generic `sans-serif` tries Arial, Helvetica, Liberation Sans, DejaVu Sans, and Noto Sans first, because the renderer would otherwise pick an arbitrary installed font (on some Windows machines, a serif one).
+Font names accept letters, numbers, spaces, hyphens, and underscores. Font settings are passed to Pele before it lays out the diagram. PDF text is exported as vector paths.
+
+#### Bundled font
+
+DuckERD ships [IBM Plex Sans Condensed](https://github.com/IBM/plex) (SIL Open Font License; see `fonts/OFL.txt` in the package) and uses it by default. With the bundled font listed first in `fontFamily`:
+
+- Tables are sized from the font's real glyph widths, so boxes fit their text closely.
+- PNG and PDF output looks the same on every operating system, whatever fonts are installed.
+- SVG output embeds the whole font as WOFF2 (about 49 KB of base64), so viewers show the same font that the layout was measured with.
+- The font covers Latin scripts. Other characters, such as Chinese, Japanese, Korean, Cyrillic, or emoji, are drawn with a fallback font from the viewer or the machine generating the file, and tables are sized for them from generic width estimates.
+
+With any other font first, PNG and PDF use the fonts installed on the machine generating the file, and SVG uses the fonts available in its viewer. Pele then sizes tables from generic width estimates, so text may fit more loosely or slightly overflow. When a requested font is not installed, PNG and PDF fall back to the bundled font. In PNG and PDF, the generic `sans-serif` also means the bundled font, because the renderer would otherwise pick an arbitrary installed font (on some Windows machines, a serif one).
 
 Font size and corner radius apply to the diagram before any scaling to `--width` or `--height`. Changing the font size affects layout and, without `--width` or `--height`, the output size; otherwise the final displayed size depends on those options. Corner radius applies to table rectangles; relationship label backgrounds retain Pele's own small radius.
 
