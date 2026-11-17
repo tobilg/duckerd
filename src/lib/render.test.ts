@@ -228,7 +228,9 @@ test('PNG and PDF receive the font as attributes, naming sans-serif fonts before
 test('canvas size follows the natural diagram size unless width or height is given', () => {
   const diagram = { width: 400.4, height: 200 };
   assert.deepEqual(computeLayout(diagram, 'svg'), { width: 401, height: 200, scale: 1 });
-  assert.deepEqual(computeLayout(diagram, 'png', 800.8), { width: 800.8, height: 400, scale: 2 });
+  // PNG sizes are whole pixels, as resvg rounds them; SVG and PDF keep fractions.
+  assert.deepEqual(computeLayout(diagram, 'png', 800.8), { width: 801, height: 400, scale: 2 });
+  assert.deepEqual(computeLayout(diagram, 'svg', 800.8), { width: 800.8, height: 400, scale: 2 });
   assert.deepEqual(computeLayout(diagram, 'pdf', undefined, 100), { width: 200, height: 100, scale: 0.5 });
   assert.deepEqual(computeLayout(diagram, 'svg', 300, 300), { width: 300, height: 300, scale: 300 / 400.4 });
 });
@@ -269,6 +271,33 @@ test('the PNG cap holds for the final integer size of very wide and very tall ca
     onWarning: (message) => { throw new Error(message); },
   }).then(() => '', (error: Error) => error.message);
   assert.match(warning, /PNG output was reduced to 100000000x1 /);
+});
+
+test('fractional PNG sizes are rounded as resvg rounds them before the limit applies', async () => {
+  const diagram = { width: 300, height: 200 };
+  // 1.51 x 60,000,000 is 90.6 MP, but resvg would allocate 2 x 60,000,000 (120 MP).
+  const tall = computeLayout(diagram, 'png', 1.51, 60_000_000);
+  assert.equal(tall.limited, '100 megapixels');
+  assert.ok(Number.isInteger(tall.width) && Number.isInteger(tall.height));
+  assert.ok(tall.width * tall.height <= MAX_PNG_PIXELS, `${tall.width}x${tall.height}`);
+
+  // A side that rounds to zero would make resvg throw; it becomes one pixel, and
+  // the diagram keeps the scale that fits the requested 0.4 px.
+  assert.deepEqual(computeLayout(diagram, 'png', 0.4, 100), { width: 1, height: 100, scale: 0.4 / 300 });
+  // Rounding down shrinks the scale so the diagram still fits.
+  const down = computeLayout(diagram, 'png', 600.4);
+  assert.deepEqual([down.width, down.height], [600, 400]);
+  assert.ok(diagram.width * down.scale <= down.width);
+
+  // The PNG has exactly the computed size, so the limit was checked on what resvg allocated.
+  for (const [width, height] of [[300.6, undefined], [1.51, 250.5], [0.4, 100]] as const) {
+    const png = await renderERD(source, { format: 'png', theme: 'default', width, height });
+    // Pele lays the diagram out for the requested width, so read its size from the same request.
+    const svg = (await renderERD(source, { format: 'svg', theme: 'default', width, height })).toString();
+    const [, innerWidth, innerHeight] = svg.match(/<svg[^>]*class="pele pele-er"[^>]*width="([\d.]+)" height="([\d.]+)"/)!.map(Number);
+    const expected = computeLayout({ width: innerWidth, height: innerHeight }, 'png', width, height);
+    assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [expected.width, expected.height], `${width}x${height}`);
+  }
 });
 
 test('rendering without dimensions uses the natural size and warns only when capped', async () => {
