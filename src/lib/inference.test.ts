@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { inferRelationships, INFERRED_RELATIONSHIPS_COMMENT } from './inference';
-import { generateMermaidCodeForAllDBs, type Metadata, type Table } from './metadata';
+import { generateMermaidCodeForAllDBs, type Constraint, type Metadata, type Table } from './metadata';
 
 const table = (name: string, columns: Record<string, string>, schemaName = 'main', databaseName = 'db'): Table => ({
   name, databaseName, schemaName, hasPrimaryKey: false, estimatedRowCount: 0,
@@ -91,7 +91,7 @@ test('any declared foreign key suppresses inference everywhere, including other 
   const candidates = [table('orders', { order_id: 'INTEGER' }), table('lineitem', { order_id: 'INTEGER' })];
   for (const [schema, database] of [['archive', 'db'], ['main', 'other']]) {
     const child = table('child', { parent_id: 'INTEGER' }, schema, database);
-    child.constraints = [{ columnName: 'parent_id', constraintType: 'FOREIGN KEY', sql: 'FOREIGN KEY (parent_id) REFERENCES parent(id)' }];
+    child.constraints = [{ columnName: 'parent_id', constraintType: 'FOREIGN KEY', referencedTable: 'parent', sql: 'FOREIGN KEY (parent_id) REFERENCES parent(id)' }];
     const data = metadata(...candidates, table('parent', { id: 'INTEGER' }, schema, database), child);
     const baseline = generateMermaidCodeForAllDBs(data)!;
     assert.match(baseline, /\|\|--o\{/);
@@ -134,4 +134,11 @@ test('empty metadata returns no diagram and table identities inherit their metad
     { name: 'empty' }, { name: 'db', schemas: [{ name: 'main', tables }] },
   ] };
   assert.match(generateMermaidCodeForAllDBs(data, false, true)!, /"db.a" }o\.\.o\{ "db.b"/);
+});
+
+test('a foreign key without a referenced table is rejected instead of drawn as "undefined"', () => {
+  const child = table('child', { parent_id: 'INTEGER' });
+  child.constraints = [{ columnName: 'parent_id', constraintType: 'FOREIGN KEY', sql: 'FOREIGN KEY (parent_id) REFERENCES parent(id)' } as unknown as Constraint];
+  assert.throws(() => generateMermaidCodeForAllDBs(metadata(table('parent', { id: 'INTEGER' }), child)),
+    /Foreign key on db\.child has no referenced table: FOREIGN KEY \(parent_id\)/);
 });

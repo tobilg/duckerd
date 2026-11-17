@@ -64,16 +64,26 @@ export interface Sequence {
   sql: string;
 }
 
-export interface Constraint {
+/** Constraint kinds reported by duckdb_constraints(). */
+export type ConstraintType = 'PRIMARY KEY' | 'FOREIGN KEY' | 'UNIQUE' | 'CHECK' | 'NOT NULL';
+
+interface ConstraintFields {
   databaseName?: string;
   schemaName?: string;
   tableName?: string;
   columnName: string;
-  constraintType: string;
-  /** The table a foreign key references, unquoted and without a schema. */
-  referencedTable?: string;
   sql: string;
 }
+
+/** A foreign key always names the table it references; other constraints never do. */
+export type Constraint = ConstraintFields & (
+  | {
+    constraintType: 'FOREIGN KEY';
+    /** The table a foreign key references, unquoted and without a schema. */
+    referencedTable: string;
+  }
+  | { constraintType: Exclude<ConstraintType, 'FOREIGN KEY'>; referencedTable?: undefined }
+);
 
 export interface Index {
   databaseName?: string;
@@ -208,9 +218,14 @@ export const generateMermaidCodeForAllDBs = (
     }).join('\n');
     // Composite keys have one row per column; draw one edge per constraint. DuckDB
     // keeps foreign keys within a schema, so the referenced table shares this prefix.
-    const referencedTables = new Map((table.constraints ?? [])
-      .filter((constraint) => constraint.constraintType === 'FOREIGN KEY')
-      .map((constraint) => [constraint.sql, constraint.referencedTable!]));
+    const referencedTables = new Map((table.constraints ?? []).flatMap((constraint) => {
+      if (constraint.constraintType !== 'FOREIGN KEY') return [];
+      // Hand-built metadata could omit the target, which would draw a table named "undefined".
+      if (!constraint.referencedTable) {
+        throw new Error(`Foreign key on ${table.databaseName}.${table.name} has no referenced table: ${constraint.sql}`);
+      }
+      return [[constraint.sql, constraint.referencedTable] as const];
+    }));
     const foreignKeys = [...referencedTables.values()]
       .map((referenced) => `    "${table.databaseName}.${referenced}" ||--o{ "${table.databaseName}.${table.name}" : has`).join('\n');
     return `"${entityName(table)}" {\n${columns}\n    }\n${foreignKeys}`;
