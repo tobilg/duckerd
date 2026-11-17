@@ -13,9 +13,63 @@ export type OutputFormat = typeof outputFormats[number];
 export interface RenderOptions {
   format: OutputFormat;
   theme: Theme | ThemeDefinition;
-  width: number;
-  height: number;
+  /** Canvas width. With height, the diagram fits inside both; alone, height follows the aspect ratio. */
+  width?: number;
+  /** Canvas height. With width, the diagram fits inside both; alone, width follows the aspect ratio. */
+  height?: number;
+  /** Receives a message when the output is scaled below the requested or natural size. */
+  onWarning?: (message: string) => void;
 }
+
+// resvg allocates 4 bytes per pixel; 100 megapixels already needs about 400 MB.
+export const MAX_PNG_PIXELS = 100_000_000;
+// Common PDF readers reject pages larger than 200 inches (14,400 points).
+export const MAX_PDF_SIDE = 14_400;
+
+interface Layout { width: number; height: number; scale: number }
+
+export const computeLayout = (
+  diagram: { width: number; height: number }, format: OutputFormat, width?: number, height?: number,
+): Layout & { limited?: string } => {
+  let layout: Layout;
+  if (width !== undefined && height !== undefined) {
+    layout = { width, height, scale: Math.min(width / diagram.width, height / diagram.height) };
+  } else if (width !== undefined) {
+    const scale = width / diagram.width;
+    layout = { width, height: Math.max(1, Math.round(diagram.height * scale)), scale };
+  } else if (height !== undefined) {
+    const scale = height / diagram.height;
+    layout = { width: Math.max(1, Math.round(diagram.width * scale)), height, scale };
+  } else {
+    layout = { width: Math.ceil(diagram.width), height: Math.ceil(diagram.height), scale: 1 };
+  }
+
+  let factor = 1;
+  let limited: string | undefined;
+  if (format === 'png' && layout.width * layout.height > MAX_PNG_PIXELS) {
+    factor = Math.sqrt(MAX_PNG_PIXELS / (layout.width * layout.height));
+    limited = `${MAX_PNG_PIXELS / 1_000_000} megapixels`;
+  } else if (format === 'pdf' && Math.max(layout.width, layout.height) > MAX_PDF_SIDE) {
+    factor = MAX_PDF_SIDE / Math.max(layout.width, layout.height);
+    limited = `${MAX_PDF_SIDE} points per side`;
+  }
+  if (factor === 1) return layout;
+  let reducedWidth = Math.max(1, Math.floor(layout.width * factor));
+  let reducedHeight = Math.max(1, Math.floor(layout.height * factor));
+  // A side clamped to one pixel can push the area back over the PNG limit
+  // (-w 400000000 -H 1), so the final integer size is checked again.
+  if (format === 'png' && reducedWidth * reducedHeight > MAX_PNG_PIXELS) {
+    if (reducedWidth >= reducedHeight) reducedWidth = Math.floor(MAX_PNG_PIXELS / reducedHeight);
+    else reducedHeight = Math.floor(MAX_PNG_PIXELS / reducedWidth);
+  }
+  return {
+    width: reducedWidth,
+    height: reducedHeight,
+    // Keep the requested scale unless the diagram no longer fits the reduced canvas.
+    scale: Math.min(layout.scale, reducedWidth / diagram.width, reducedHeight / diagram.height),
+    limited,
+  };
+};
 
 const applyTheme = (svg: string, theme: ThemeDefinition): string => {
   const rootStyle = svg.match(/^<svg\b[^>]*\bstyle="([^"]*)"/)?.[1] ?? '';
@@ -93,15 +147,21 @@ export const renderERD = async (source: string, options: RenderOptions): Promise
   const diagram = render(source, {
     responsive: false, maxWidth: options.width, fontFamily: theme.fontFamily, fontSize: theme.fontSize,
   });
-  const scale = Math.min(options.width / diagram.width, options.height / diagram.height);
-  const x = (options.width - diagram.width * scale) / 2;
-  const y = (options.height - diagram.height * scale) / 2;
+  const { width, height, scale, limited } = computeLayout(diagram, options.format, options.width, options.height);
+  if (limited) {
+    const percent = Math.max(1, Math.round(scale * 100));
+    options.onWarning?.(`Diagram is ${Math.ceil(diagram.width)}x${Math.ceil(diagram.height)} px; `
+      + `${options.format.toUpperCase()} output was reduced to ${width}x${height} (${percent}% scale) to stay within ${limited}. `
+      + 'Use SVG output for a full-size diagram.');
+  }
+  const x = (width - diagram.width * scale) / 2;
+  const y = (height - diagram.height * scale) / 2;
   // Mermaid requires cardinalities in source. DuckERD's inference comment
   // identifies diagrams whose dashed edges use placeholders for unknown values.
   const diagramSvg = source.split(/\r?\n/).some(line => line.trim() === INFERRED_RELATIONSHIPS_COMMENT)
     ? removeInferredMarkers(diagram.svg) : diagram.svg;
   const themed = applyTheme(diagramSvg, theme);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${options.width}" height="${options.height}" viewBox="0 0 ${options.width} ${options.height}">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
 <rect width="100%" height="100%" fill="${theme.colors.background}"/>
 <g transform="translate(${x} ${y}) scale(${scale})">${options.format === 'svg' ? themed : rasterFonts(themed, theme)}</g>
 </svg>`;
@@ -114,7 +174,7 @@ export const renderERD = async (source: string, options: RenderOptions): Promise
   // Normalize text to vector paths using the same fonts as PNG rendering. This
   // preserves Unicode labels and avoids PDF's limited built-in font encodings.
   return new Promise<Buffer>((resolve, reject) => {
-    const doc = new PDFDocument({ size: [options.width, options.height], margin: 0 });
+    const doc = new PDFDocument({ size: [width, height], margin: 0 });
     const chunks: Buffer[] = [];
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolve(Buffer.concat(chunks)));

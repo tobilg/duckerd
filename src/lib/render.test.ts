@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { deflateSync, inflateSync } from 'node:zlib';
 import resvg from '@resvg/resvg-js';
-import { rasterFonts, renderERD, themeNames } from './render';
+import { computeLayout, MAX_PDF_SIDE, MAX_PNG_PIXELS, rasterFonts, renderERD, themeNames } from './render';
 import { parseTheme, resolveTheme } from './themes';
 import { INFERRED_RELATIONSHIPS_COMMENT } from './inference';
 
@@ -219,4 +219,71 @@ test('PNG and PDF receive the font as attributes, naming sans-serif fonts before
     const style = root.match(/\bstyle="([^"]*)"/)?.[1] ?? '';
     assert.doesNotMatch(style, /(?:^|;)\s*font(?:-family)?\s*:/);
   }
+});
+
+test('canvas size follows the natural diagram size unless width or height is given', () => {
+  const diagram = { width: 400.4, height: 200 };
+  assert.deepEqual(computeLayout(diagram, 'svg'), { width: 401, height: 200, scale: 1 });
+  assert.deepEqual(computeLayout(diagram, 'png', 800.8), { width: 800.8, height: 400, scale: 2 });
+  assert.deepEqual(computeLayout(diagram, 'pdf', undefined, 100), { width: 200, height: 100, scale: 0.5 });
+  assert.deepEqual(computeLayout(diagram, 'svg', 300, 300), { width: 300, height: 300, scale: 300 / 400.4 });
+});
+
+test('PNG and PDF canvases are capped, SVG is not', () => {
+  const huge = { width: 20_000, height: 10_000 };
+  assert.deepEqual(computeLayout(huge, 'svg'), { width: 20_000, height: 10_000, scale: 1 });
+  const png = computeLayout(huge, 'png');
+  assert.ok(png.width * png.height <= MAX_PNG_PIXELS);
+  assert.ok(Math.abs(png.width / png.height - 2) < 0.001);
+  assert.match(png.limited!, /100 megapixels/);
+  const pdf = computeLayout(huge, 'pdf');
+  assert.deepEqual([pdf.width, pdf.height, pdf.scale], [MAX_PDF_SIDE, MAX_PDF_SIDE / 2, MAX_PDF_SIDE / 20_000]);
+  assert.equal(computeLayout(huge, 'png', 1000).limited, undefined, 'explicit sizes under the cap are kept');
+  assert.equal(computeLayout(huge, 'pdf', 1000, 1000).limited, undefined);
+});
+
+test('the PNG cap holds for the final integer size of very wide and very tall canvases', async () => {
+  const diagram = { width: 300, height: 200 };
+  // The one-pixel side cannot shrink, so the other side takes the whole reduction.
+  assert.deepEqual(computeLayout(diagram, 'png', 400_000_000, 1),
+    { width: MAX_PNG_PIXELS, height: 1, scale: 1 / 200, limited: '100 megapixels' });
+  assert.deepEqual(computeLayout(diagram, 'png', 1, 400_000_000),
+    { width: 1, height: MAX_PNG_PIXELS, scale: 1 / 300, limited: '100 megapixels' });
+
+  for (const [width, height] of [[400_000_000, 1], [1, 400_000_000], [400_000_000, 2], [3, 400_000_000],
+    [400_000_000, undefined], [undefined, 400_000_000], [123_457, 98_765]]) {
+    const layout = computeLayout(diagram, 'png', width, height);
+    const label = `${width}x${height}`;
+    assert.ok(Number.isInteger(layout.width) && Number.isInteger(layout.height), label);
+    assert.ok(layout.width * layout.height <= MAX_PNG_PIXELS, label);
+    assert.ok(diagram.width * layout.scale <= layout.width + 1e-6 && diagram.height * layout.scale <= layout.height + 1e-6, label);
+  }
+
+  // The warning reports the size actually rendered. Stop before allocating it.
+  const warning = await renderERD(source, {
+    format: 'png', theme: 'default', width: 400_000_000, height: 1,
+    onWarning: (message) => { throw new Error(message); },
+  }).then(() => '', (error: Error) => error.message);
+  assert.match(warning, /PNG output was reduced to 100000000x1 /);
+});
+
+test('rendering without dimensions uses the natural size and warns only when capped', async () => {
+  const warnings: string[] = [];
+  const onWarning = (message: string) => warnings.push(message);
+  const svg = (await renderERD(source, { format: 'svg', theme: 'default', onWarning })).toString();
+  const [width, height] = svg.match(/^<svg[^>]*width="(\d+)" height="(\d+)"/)!.slice(1).map(Number);
+  assert.ok(width > 100 && height > 100);
+  assert.match(svg, /<g transform="translate\([\d.]+ [\d.]+\) scale\(1\)">/, 'diagram drawn at scale 1');
+  assert.deepEqual(warnings, []);
+
+  const half = Math.round(width / 2);
+  const halfWidth = (await renderERD(source, { format: 'svg', theme: 'default', width: half })).toString();
+  const [, scaledHeight] = halfWidth.match(/^<svg[^>]*width="(\d+)" height="(\d+)"/)!.slice(1).map(Number);
+  assert.match(halfWidth, new RegExp(`^<svg[^>]*width="${half}"`));
+  assert.ok(Math.abs(scaledHeight - height / 2) <= 1, 'height follows the aspect ratio');
+
+  const pdf = await renderERD(source, { format: 'pdf', theme: 'default', width: 30_000, height: 30_000, onWarning });
+  assert.match(pdf.toString('latin1'), /\/MediaBox \[0 0 14400 14400\]/);
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /PDF output was reduced to 14400x14400 .*Use SVG output/);
 });

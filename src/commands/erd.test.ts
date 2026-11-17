@@ -84,15 +84,20 @@ test('CLI renders SVG and saves expanded source without a temporary source file 
   assert.equal(existsSync(path.join(directory, 'schema_erd.mmd')), false);
 });
 
-test('CLI preserves default PNG output and leaves existing schema_erd.mmd files alone', () => {
+test('CLI sizes default PNG output to the diagram and leaves existing schema_erd.mmd files alone', () => {
   const sentinel = path.join(directory, 'schema_erd.mmd');
   writeFileSync(sentinel, 'existing source');
   const result = run('-d', database);
   assert.equal(result.status, 0, result.stderr);
   const png = readFileSync(path.join(directory, 'sample data_erd.png'));
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
-  assert.equal(png.readUInt32BE(16), 1024);
-  assert.equal(png.readUInt32BE(20), 768);
+  // Without -w/-H the canvas is the natural diagram size, matching SVG output.
+  const svgResult = run('-d', database, '-o', 'natural.svg');
+  assert.equal(svgResult.status, 0, svgResult.stderr);
+  const svg = readFileSync(path.join(directory, 'natural.svg'), 'utf8');
+  const [width, height] = svg.match(/^<svg[^>]*width="(\d+)" height="(\d+)"/)!.slice(1).map(Number);
+  assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [width, height]);
+  assert.notDeepEqual([width, height], [1024, 768]);
   assert.equal(readFileSync(sentinel, 'utf8'), 'existing source');
 });
 
@@ -195,7 +200,7 @@ test('CLI inference is opt-in, scopes links to schemas, and preserves saved-sour
   assert.match(svg, />details__region_id<\/text>/);
   assert.match(svg, />inferred: order_id \(unknown\)<\/text>/);
   assert.doesNotMatch(svg, /class="pele-marker"/);
-  assert.equal(svg, (await renderERD(source, { format: 'svg', theme: 'default', width: 1024, height: 768 })).toString());
+  assert.equal(svg, (await renderERD(source, { format: 'svg', theme: 'default' })).toString());
 });
 
 test('CLI custom inference regex replaces the default in SVG, PNG, and PDF', () => {
