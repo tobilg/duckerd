@@ -46,6 +46,12 @@ export const computeLayout = (
   } else {
     layout = { width: Math.ceil(diagram.width), height: Math.ceil(diagram.height), scale: 1 };
   }
+  if (format === 'png') {
+    // resvg rounds the canvas to whole pixels (1.51 becomes 2) and rejects a zero
+    // side, so the PNG limit must apply to the size it will actually allocate.
+    const rounded = { width: Math.max(1, Math.round(layout.width)), height: Math.max(1, Math.round(layout.height)) };
+    layout = { ...rounded, scale: Math.min(layout.scale, rounded.width / diagram.width, rounded.height / diagram.height) };
+  }
 
   let factor = 1;
   let limited: string | undefined;
